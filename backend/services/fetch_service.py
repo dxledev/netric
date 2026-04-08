@@ -6,6 +6,7 @@ from nba_api.stats.endpoints import playercareerstats, playergamelog
 from nba_api.stats.static import players
 
 from database import db
+from services.season_policy import select_season_ids_for_storage
 
 player_cache = db["player_cache"]
 NBA_API_TIMEOUT_SECONDS = int(os.getenv("NBA_API_TIMEOUT_SECONDS", "60"))
@@ -119,8 +120,9 @@ def fetch_player_by_name(name: str):
     )
     df = career.get_data_frames()[0]
     season_ids = get_active_season_ids(df)
-    season_logs = fetch_game_logs_by_season(player_id, season_ids)
-    latest_season = season_ids[0] if season_ids else None
+    season_ids_to_store = select_season_ids_for_storage(season_ids)
+    season_logs = fetch_game_logs_by_season(player_id, season_ids_to_store)
+    latest_season = season_ids_to_store[0] if season_ids_to_store else None
 
     summary_data = {
         "player_id": player_id,
@@ -156,8 +158,9 @@ def fetch_player_data(player_id: int):
     )
     career_df = career.get_data_frames()[0]
     season_ids = get_active_season_ids(career_df)
-    season_logs = fetch_game_logs_by_season(player_id, season_ids)
-    latest_season = season_ids[0] if season_ids else None
+    season_ids_to_store = select_season_ids_for_storage(season_ids)
+    season_logs = fetch_game_logs_by_season(player_id, season_ids_to_store)
+    latest_season = season_ids_to_store[0] if season_ids_to_store else None
 
     return {
         "player_id": player_id,

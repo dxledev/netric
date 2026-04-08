@@ -1,5 +1,6 @@
 import time
 from database import db
+from services.cache_status import has_complete_cached_season_logs
 from services.player_pool import get_tracked_players
 
 fetch_queue = db["fetch_queue"]
@@ -16,32 +17,39 @@ def seed_active_players():
         total += 1
         player_id = player["id"]
         name = player["full_name"]
+        cached_player = player_cache.find_one(
+            {"player_id": player_id},
+            {
+                "data.game_log": 1,
+                "data.season_game_logs": 1,
+                "data.career_stats": 1,
+            },
+        )
 
-        # Skip if already cached
-        if player_cache.find_one({"player_id": player_id}):
+        if cached_player and has_complete_cached_season_logs(cached_player):
             skipped += 1
             continue
 
-        # Skip if already queued
         if fetch_queue.find_one({"player_id": player_id}):
             skipped += 1
             continue
 
-        fetch_queue.insert_one({
-            "player_id": player_id,
-            "name": name
-        })
+        fetch_queue.insert_one(
+            {
+                "player_id": player_id,
+                "name": name,
+            }
+        )
 
         queued += 1
         print(f"Queued: {name}")
 
-        # Small delay to avoid spamming Mongo
         time.sleep(1)
 
     print("----- DONE -----")
     print(f"Total tracked players: {total}")
     print(f"Queued: {queued}")
-    print(f"Skipped (cached or already queued): {skipped}")
+    print(f"Skipped (complete cache or already queued): {skipped}")
 
 if __name__ == "__main__":
     seed_active_players()

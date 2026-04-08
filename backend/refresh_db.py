@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from database import db
+from services.cache_status import has_complete_cached_season_logs
 from services.fetch_service import (
     get_latest_cached_game_date,
     get_latest_remote_game_date,
@@ -25,11 +26,22 @@ def is_already_queued(player_id):
 
 
 def find_cached_player(player_id):
-    return player_cache.find_one({"player_id": player_id}, {"data.game_log": 1})
+    return player_cache.find_one(
+        {"player_id": player_id},
+        {
+            "data.game_log": 1,
+            "data.season_game_logs": 1,
+            "data.career_stats": 1,
+        },
+    )
 
 
 def should_refresh_player(player_id):
     cached_player = find_cached_player(player_id)
+
+    if not has_complete_cached_season_logs(cached_player):
+        return True
+
     cached_latest_game = get_latest_cached_game_date(cached_player)
 
     if cached_latest_game is None:

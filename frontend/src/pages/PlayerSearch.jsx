@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import axios from "axios"
 import PlayerCard from "../components/PlayerCard"
 import ReturnHome from "../components/ReturnHome"
 import { API_BASE } from "../api"
 import { writePlayerSummaryCache } from "../utils/playerSummaryCache"
+import { normalizeSearchInput } from "../utils/searchText"
 
 const CATEGORY_LABELS = {
   players: "Players",
@@ -17,9 +18,13 @@ export default function PlayerSearch() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [category, setCategory] = useState("players")
+  const [matches, setMatches] = useState([])
+  const [loadingMatches, setLoadingMatches] = useState(false)
 
-  const searchPlayer = async () => {
-    if (!name.trim()) {
+  const searchPlayer = async inputValue => {
+    const normalizedQuery = normalizeSearchInput(inputValue ?? name)
+
+    if (!normalizedQuery) {
       return
     }
 
@@ -28,12 +33,13 @@ export default function PlayerSearch() {
       setError(null)
       setStats(null)
 
-      const encodedName = encodeURIComponent(name.trim())
+      const encodedName = encodeURIComponent(normalizedQuery)
 
       const fetchData = async () => {
         try {
           const res = await axios.get(`${API_BASE}/search/${category}/${encodedName}`)
           setStats(res.data)
+          setMatches([])
           if (category === "players" && res.data?.player_id) {
             writePlayerSummaryCache(res.data.player_id, res.data)
           }
@@ -54,6 +60,42 @@ export default function PlayerSearch() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let isCancelled = false
+    const normalizedQuery = normalizeSearchInput(name)
+
+    if (category !== "players" || !normalizedQuery) {
+      setMatches([])
+      setLoadingMatches(false)
+      return
+    }
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        setLoadingMatches(true)
+        const encodedName = encodeURIComponent(normalizedQuery)
+        const res = await axios.get(`${API_BASE}/search/players/matches/${encodedName}?limit=25`)
+
+        if (!isCancelled) {
+          setMatches(Array.isArray(res.data?.matches) ? res.data.matches : [])
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setMatches([])
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingMatches(false)
+        }
+      }
+    }, 250)
+
+    return () => {
+      isCancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [name, category])
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -86,24 +128,64 @@ export default function PlayerSearch() {
                   <select
                     value={category}
                     onChange={e => setCategory(e.target.value)}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 focus:border-blue-300/50"
+                    className="rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 focus:border-blue-300/50"
                   >
-                    <option value="players">Players</option>
-                    <option value="teams">Teams</option>
-                    <option value="stats">Stats</option>
+                    <option value="players" className="bg-slate-900 text-white">
+                      Players
+                    </option>
+                    <option value="teams" className="bg-slate-900 text-white">
+                      Teams
+                    </option>
+                    <option value="stats" className="bg-slate-900 text-white">
+                      Stats
+                    </option>
                   </select>
 
-                  <input
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 placeholder:text-slate-400 focus:border-blue-300/50"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        searchPlayer()
-                      }
-                    }}
-                    placeholder="Enter a name to search"
-                  />
+                  <div className="relative">
+                    <input
+                      className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 placeholder:text-slate-400 focus:border-blue-300/50"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      autoComplete="off"
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          searchPlayer()
+                        }
+                      }}
+                      placeholder="Enter a name to search"
+                    />
+
+                    {category === "players" && (loadingMatches || matches.length > 0) && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-blue-300/20 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur">
+                        {loadingMatches && (
+                          <div className="px-4 py-3 text-xs text-slate-300">Finding matches...</div>
+                        )}
+
+                        {!loadingMatches && (
+                          <div className="max-h-72 overflow-y-auto py-1">
+                            {matches.map(match => (
+                              <button
+                                type="button"
+                                key={match.player_id}
+                                onClick={() => {
+                                  setName(match.name)
+                                  searchPlayer(match.name)
+                                }}
+                                className="flex w-full items-center justify-between bg-transparent px-4 py-2 text-left text-sm text-slate-100 transition-colors duration-200 hover:bg-blue-400/10"
+                              >
+                                <span className="truncate">{match.name}</span>
+                                {match.is_active && (
+                                  <span className="ml-3 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-emerald-200">
+                                    Active
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     onClick={searchPlayer}

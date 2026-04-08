@@ -1,4 +1,6 @@
 from datetime import datetime
+import re
+import unicodedata
 
 import pandas as pd
 from fastapi import HTTPException
@@ -9,6 +11,7 @@ from database import db
 player_cache = db["player_cache"]
 fetch_queue = db["fetch_queue"]
 SUMMARY_VERSION = 4
+ACTIVE_PLAYER_MATCHES_ONLY = True
 
 
 def to_int(value, default=0):
@@ -23,6 +26,31 @@ def to_float(value, default=0.0):
         return default
 
     return float(value)
+
+
+def normalize_search_query(value: str):
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    without_diacritics = "".join(char for char in normalized if not unicodedata.combining(char))
+
+    return (
+        without_diacritics
+        .replace("’", "'")
+        .replace("`", "'")
+        .strip()
+    )
+
+
+def build_search_variants(value: str):
+    base_query = str(value or "").strip()
+    normalized_query = normalize_search_query(base_query)
+    candidates = [base_query, normalized_query]
+    unique_candidates = []
+
+    for candidate in candidates:
+        if candidate and candidate not in unique_candidates:
+            unique_candidates.append(candidate)
+
+    return [re.escape(candidate) for candidate in unique_candidates]
 
 
 def build_efficiency_metrics(fgm, fg3m, fga, fta, pts):
@@ -219,7 +247,17 @@ def build_player_summary_from_data(player_id: int, data: dict):
 
 
 def search_player_stats(name: str):
-    results = players.find_players_by_full_name(name)
+    results = []
+
+    for query in build_search_variants(name):
+        try:
+            results = players.find_players_by_full_name(query)
+        except re.error:
+            continue
+
+        if results:
+            break
+
     if not results:
         raise HTTPException(status_code=404, detail="Player not found")
 
@@ -240,6 +278,40 @@ def search_player_stats(name: str):
         status_code=404,
         detail="Player not cached yet. Fetch scheduled."
     )
+
+
+def search_player_matches(name: str, limit: int = 25):
+    if not str(name or "").strip():
+        return {"matches": []}
+
+    unique_results = {}
+
+    for query in build_search_variants(name):
+        try:
+            results = players.find_players_by_full_name(query)
+        except re.error:
+            continue
+
+        for result in results:
+            player_id = int(result.get("id", 0))
+            if not player_id or player_id in unique_results:
+                continue
+
+            is_active = bool(result.get("is_active"))
+            if ACTIVE_PLAYER_MATCHES_ONLY and not is_active:
+                continue
+
+            unique_results[player_id] = {
+                "player_id": player_id,
+                "name": result.get("full_name", "").strip(),
+                "is_active": is_active,
+            }
+
+        if unique_results:
+            break
+
+    matches = list(unique_results.values())[: max(1, min(limit, 100))]
+    return {"matches": matches}
 
 def build_player_summary(player_id: int):
     cached = player_cache.find_one({"player_id": player_id})

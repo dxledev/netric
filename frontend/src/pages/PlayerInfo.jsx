@@ -269,6 +269,16 @@ export default function PlayerInfo() {
           index,
         })
       })
+
+      const groupAverages = getGameLogAverages(group.games.map(({ game }) => game))
+
+      if (groupAverages) {
+        groupedRows.push({
+          type: "groupAverage",
+          key: `${groupKey}-avg`,
+          averages: groupAverages,
+        })
+      }
     })
 
     return groupedRows
@@ -513,144 +523,156 @@ export default function PlayerInfo() {
               <div key={tab} className="animate-content-in">
                 {tab === "season" && (
                   <div className="grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
-                    <div className="grid gap-5">
-                      {seasonSections.map(section => (
-                        <div
-                          key={section.title}
-                          className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15"
-                        >
-                          <div className="mb-5">
-                            <h2 className="text-lg font-semibold text-white">{section.title}</h2>
-                            <p className="mt-1 text-sm text-slate-400">{section.description}</p>
-                          </div>
+                      <div className="grid gap-5">
+                        {seasonSections.map(section => (
+                          <div
+                            key={section.title}
+                            className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15"
+                          >
+                            <div className="mb-5">
+                              <h2 className="text-lg font-semibold text-white">{section.title}</h2>
+                              <p className="mt-1 text-sm text-slate-400">{section.description}</p>
+                            </div>
 
-                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            {section.stats.map(stat => (
-                              <div
-                                key={stat.label}
-                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition-colors duration-300 hover:bg-white/10"
-                              >
-                                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
-                                <p className="mt-2 text-xl font-semibold text-white">{stat.value}</p>
-                              </div>
-                            ))}
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              {section.stats.map(stat => (
+                                <div
+                                  key={stat.label}
+                                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition-colors duration-300 hover:bg-white/10"
+                                >
+                                  <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
+                                  <p className="mt-2 text-xl font-semibold text-white">{stat.value}</p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid gap-5">
-                      <div className="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-blue-500/12 via-slate-900/75 to-emerald-400/10 p-5 shadow-lg shadow-black/20">
-                        <p className="text-xs uppercase tracking-[0.3em] text-blue-200">Season Focus</p>
-                        <h2 className="mt-3 text-2xl font-semibold text-white">
-                          {formatPerGameStat(activeSeasonStats, activeSeasonStats?.pts)} / {formatPerGameStat(activeSeasonStats, activeSeasonStats?.ast)} / {formatPerGameStat(activeSeasonStats, activeSeasonStats?.reb)}
-                        </h2>
-                        <p className="mt-2 text-sm text-slate-300">
-                          A compact scoring, playmaking, and rebounding snapshot for the current season.
-                        </p>
+                        ))}
                       </div>
 
-                      {activeLastGame ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (activeLastGameIndex >= 0) {
-                              openGameSummary(activeLastGame, activeLastGameIndex)
-                            }
-                          }}
-                          disabled={activeLastGameIndex < 0}
-                          className="rounded-[1.5rem] border border-white/10 bg-slate-900/60 p-5 text-left shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:border-white/10"
-                        >
-                          <p className="text-xs uppercase tracking-[0.3em] text-emerald-200">Last Game</p>
-                          <h2 className="mt-3 text-xl font-semibold text-white">{activeLastGame.matchup}</h2>
-                          <p className="mt-1 text-sm text-slate-400">{activeLastGame.date}</p>
+                      <div className="grid gap-5">
+                        <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15">
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-left">
+                            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Season View</p>
+                            <p className="mt-2 text-sm text-slate-300">Switch seasons to compare year-over-year performance.</p>
 
-                          <div className="mt-5 grid grid-cols-3 gap-3">
-                            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
-                              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">PTS</p>
-                              <p className="mt-2 text-xl font-semibold text-white">{formatNumber(activeLastGame.pts, 0)}</p>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
-                              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">AST</p>
-                              <p className="mt-2 text-xl font-semibold text-white">{formatNumber(activeLastGame.ast, 0)}</p>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
-                              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">REB</p>
-                              <p className="mt-2 text-xl font-semibold text-white">{formatNumber(activeLastGame.reb, 0)}</p>
-                            </div>
-                          </div>
-                        </button>
-                      ) : (
-                        <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-slate-900/40 p-5 text-sm text-slate-400">
-                          Recent game data is not available for this player yet.
-                        </div>
-                      )}
-
-                      {activeLastFiveGames.length > 0 && (
-                        <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15">
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Last 5 Games</p>
-                              <p className="mt-2 text-sm text-slate-300">
-                                Click into the game log tab for the full season table.
-                              </p>
-                            </div>
-
-                            <button
-                              onClick={() => setTab("games")}
-                              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10"
-                            >
-                              Open Game Log
-                            </button>
-                          </div>
-
-                          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-                            {activeLastFiveGames.map((game, index) => (
-                              <button
-                                key={`${game.game_id || game.game_date || game.matchup}-preview`}
-                                type="button"
-                                onClick={() => openGameSummary(game, index)}
-                                className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/6 to-white/0 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1 hover:border-blue-300/25 hover:bg-white/10"
+                            <label className="mt-4 flex w-full flex-col items-start gap-2 text-sm text-slate-300">
+                              <span className="text-xs uppercase tracking-[0.22em] text-slate-400">Season</span>
+                              <select
+                                value={activeGameLogSeason}
+                                onChange={event => setSelectedGameLogSeason(event.target.value)}
+                                className="min-w-36 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-left text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
                               >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div>
-                                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{game.date}</p>
-                                    <h3 className="mt-2 text-sm font-semibold text-white">{game.matchup}</h3>
-                                    <p className="mt-1 text-xs text-slate-300">{game.result || "Pending"} • {game.min || "-"} MIN</p>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-2 text-right text-sm">
-                                    <div>
-                                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">TS%</p>
-                                      <p className="mt-1 font-semibold text-white">{formatPct(game.ts_pct)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">EF%</p>
-                                      <p className="mt-1 font-semibold text-white">{formatPct(game.efg_pct)}</p>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="mt-4 grid grid-cols-3 gap-3">
-                                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">PTS</p>
-                                    <p className="mt-1 font-medium text-white">{formatNumber(game.pts, 0)}</p>
-                                  </div>
-                                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">REB</p>
-                                    <p className="mt-1 font-medium text-white">{formatNumber(game.reb, 0)}</p>
-                                  </div>
-                                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">AST</p>
-                                    <p className="mt-1 font-medium text-white">{formatNumber(game.ast, 0)}</p>
-                                  </div>
-                                </div>
-                              </button>
-                            ))}
+                                {availableGameLogSeasons.map(season => (
+                                  <option key={season} value={season}>
+                                    {season}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
                           </div>
                         </div>
-                      )}
-                    </div>
+
+                        {activeLastGame ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (activeLastGameIndex >= 0) {
+                                openGameSummary(activeLastGame, activeLastGameIndex)
+                              }
+                            }}
+                            disabled={activeLastGameIndex < 0}
+                            className="rounded-[1.5rem] border border-white/10 bg-slate-900/60 p-5 text-left shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:border-white/10"
+                          >
+                            <p className="text-xs uppercase tracking-[0.3em] text-emerald-200">Last Game</p>
+                            <h2 className="mt-3 text-xl font-semibold text-white">{activeLastGame.matchup}</h2>
+                            <p className="mt-1 text-sm text-slate-400">{activeLastGame.date}</p>
+
+                            <div className="mt-5 grid grid-cols-3 gap-3">
+                              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">PTS</p>
+                                <p className="mt-2 text-xl font-semibold text-white">{formatNumber(activeLastGame.pts, 0)}</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">AST</p>
+                                <p className="mt-2 text-xl font-semibold text-white">{formatNumber(activeLastGame.ast, 0)}</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">REB</p>
+                                <p className="mt-2 text-xl font-semibold text-white">{formatNumber(activeLastGame.reb, 0)}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ) : (
+                          <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-slate-900/40 p-5 text-sm text-slate-400">
+                            Recent game data is not available for this player yet.
+                          </div>
+                        )}
+
+                        {activeLastFiveGames.length > 0 && (
+                          <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15">
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Last 5 Games</p>
+                                <p className="mt-2 text-sm text-slate-300">
+                                  Click into the game log tab for the full season table.
+                                </p>
+                              </div>
+
+                              <button
+                                onClick={() => setTab("games")}
+                                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10"
+                              >
+                                Open Game Log
+                              </button>
+                            </div>
+
+                            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+                              {activeLastFiveGames.map((game, index) => (
+                                <button
+                                  key={`${game.game_id || game.game_date || game.matchup}-preview`}
+                                  type="button"
+                                  onClick={() => openGameSummary(game, index)}
+                                  className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/6 to-white/0 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1 hover:border-blue-300/25 hover:bg-white/10"
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{game.date}</p>
+                                      <h3 className="mt-2 text-sm font-semibold text-white">{game.matchup}</h3>
+                                      <p className="mt-1 text-xs text-slate-300">{game.result || "Pending"} • {game.min || "-"} MIN</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 text-right text-sm">
+                                      <div>
+                                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">TS%</p>
+                                        <p className="mt-1 font-semibold text-white">{formatPct(game.ts_pct)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">EF%</p>
+                                        <p className="mt-1 font-semibold text-white">{formatPct(game.efg_pct)}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-4 grid grid-cols-3 gap-3">
+                                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">PTS</p>
+                                      <p className="mt-1 font-medium text-white">{formatNumber(game.pts, 0)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">REB</p>
+                                      <p className="mt-1 font-medium text-white">{formatNumber(game.reb, 0)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">AST</p>
+                                      <p className="mt-1 font-medium text-white">{formatNumber(game.ast, 0)}</p>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                   </div>
                 )}
 
@@ -746,6 +768,34 @@ export default function PlayerInfo() {
                                           </span>
                                         </div>
                                       </td>
+                                    </tr>
+                                  )
+                                }
+
+                                if (row.type === "groupAverage") {
+                                  return (
+                                    <tr key={row.key} className="border-t border-white/10 bg-white/[0.04] text-sm text-slate-100">
+                                      <td className="px-4 py-3 font-semibold uppercase tracking-[0.16em] text-blue-200">Avg</td>
+                                      <td className="px-4 py-3" />
+                                      <td className="px-4 py-3" />
+                                      <td className="px-4 py-3 font-medium">{row.averages.min}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.pts}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.reb}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.ast}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.stl}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.blk}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.tov}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.pf}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.fgm}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.fga}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.fgPct}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.threePm}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.threePa}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.fg3Pct}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.ftm}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.fta}</td>
+                                      <td className="px-4 py-3 font-medium">{row.averages.ftPct}</td>
+                                      <td className="pl-4 pr-7 py-3 font-medium">{row.averages.plusMinus}</td>
                                     </tr>
                                   )
                                 }

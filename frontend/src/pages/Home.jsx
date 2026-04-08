@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
 import { API_BASE } from "../api"
 import { readPlayerSummaryCache, writePlayerSummaryCache } from "../utils/playerSummaryCache"
+import { normalizeSearchFilter } from "../utils/searchText"
 
 const EMPTY_FAVORITES = {
   players: [],
@@ -12,6 +13,100 @@ const EMPTY_FAVORITES = {
 }
 
 const FAVORITES_CACHE_TTL = 1000 * 60 * 15
+const TEAM_ALIASES_BY_ABBREVIATION = {
+  ATL: ["Atlanta Hawks", "Hawks", "Atlanta"],
+  BKN: ["Brooklyn Nets", "Nets", "Brooklyn"],
+  BOS: ["Boston Celtics", "Celtics", "Boston"],
+  CHA: ["Charlotte Hornets", "Hornets", "Charlotte"],
+  CHI: ["Chicago Bulls", "Bulls", "Chicago"],
+  CLE: ["Cleveland Cavaliers", "Cavaliers", "Cavs", "Cleveland"],
+  DAL: ["Dallas Mavericks", "Mavericks", "Mavs", "Dallas"],
+  DEN: ["Denver Nuggets", "Nuggets", "Denver"],
+  DET: ["Detroit Pistons", "Pistons", "Detroit"],
+  GSW: ["Golden State Warriors", "Warriors", "Golden State"],
+  HOU: ["Houston Rockets", "Rockets", "Houston"],
+  IND: ["Indiana Pacers", "Pacers", "Indiana"],
+  LAC: ["Los Angeles Clippers", "Clippers", "LA Clippers", "Los Angeles"],
+  LAL: ["Los Angeles Lakers", "Lakers", "LA Lakers", "Los Angeles"],
+  MEM: ["Memphis Grizzlies", "Grizzlies", "Memphis"],
+  MIA: ["Miami Heat", "Heat", "Miami"],
+  MIL: ["Milwaukee Bucks", "Bucks", "Milwaukee"],
+  MIN: ["Minnesota Timberwolves", "Timberwolves", "Wolves", "Minnesota"],
+  NOP: ["New Orleans Pelicans", "Pelicans", "New Orleans"],
+  NYK: ["New York Knicks", "Knicks", "New York"],
+  OKC: ["Oklahoma City Thunder", "Thunder", "Oklahoma City"],
+  ORL: ["Orlando Magic", "Magic", "Orlando"],
+  PHI: ["Philadelphia 76ers", "76ers", "Sixers", "Philadelphia"],
+  PHX: ["Phoenix Suns", "Suns", "Phoenix"],
+  POR: ["Portland Trail Blazers", "Trail Blazers", "Blazers", "Portland"],
+  SAC: ["Sacramento Kings", "Kings", "Sacramento"],
+  SAS: ["San Antonio Spurs", "Spurs", "San Antonio"],
+  TOR: ["Toronto Raptors", "Raptors", "Toronto"],
+  UTA: ["Utah Jazz", "Jazz", "Utah"],
+  WAS: ["Washington Wizards", "Wizards", "Washington"],
+}
+const TEAM_FILTER_OPTIONS = Object.entries(TEAM_ALIASES_BY_ABBREVIATION)
+  .map(([abbreviation, aliases]) => ({
+    abbreviation,
+    name: aliases[0] || abbreviation,
+  }))
+  .sort((left, right) => left.name.localeCompare(right.name))
+const PLAYER_SORT_OPTIONS = [
+  { value: "pts", label: "PTS" },
+  { value: "ast", label: "AST" },
+  { value: "reb", label: "REB" },
+  { value: "stl", label: "STL" },
+  { value: "blk", label: "BLK" },
+  { value: "tov", label: "TOV" },
+  { value: "min_total", label: "MIN" },
+  { value: "fg_pct", label: "FG%" },
+  { value: "fg3_pct", label: "3FG%" },
+  { value: "ft_pct", label: "FT%" },
+  { value: "ts_pct", label: "TS%" },
+  { value: "efg_pct", label: "eFG%" },
+]
+const PERCENTAGE_SORT_STATS = new Set(["fg_pct", "fg3_pct", "ft_pct", "ts_pct", "efg_pct"])
+
+function getDisplaySeasonStats(summary) {
+  return summary?.season_stats_by_season?.[summary?.season] || summary?.season_stats || null
+}
+
+function getSortStatValue(summary, statKey) {
+  const seasonStats = getDisplaySeasonStats(summary)
+
+  if (!seasonStats) {
+    return null
+  }
+
+  if (statKey === "ft_pct") {
+    const makes = Number(seasonStats.ftm)
+    const attempts = Number(seasonStats.fta)
+
+    if (!Number.isFinite(makes) || !Number.isFinite(attempts) || attempts <= 0) {
+      return null
+    }
+
+    return makes / attempts
+  }
+
+  const rawValue = Number(seasonStats[statKey])
+
+  if (!Number.isFinite(rawValue)) {
+    return null
+  }
+
+  if (PERCENTAGE_SORT_STATS.has(statKey)) {
+    return rawValue
+  }
+
+  const gamesPlayed = Number(seasonStats.gp)
+
+  if (!Number.isFinite(gamesPlayed) || gamesPlayed <= 0) {
+    return null
+  }
+
+  return rawValue / gamesPlayed
+}
 
 function normalizeFavorites(data = {}) {
   return {
@@ -169,12 +264,15 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [draggedPlayerId, setDraggedPlayerId] = useState(null)
   const [dragOverPlayerId, setDragOverPlayerId] = useState(null)
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
-  const [selectedFilter, setSelectedFilter] = useState("player_name")
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false)
   const [playerNameFilter, setPlayerNameFilter] = useState("")
   const [teamFilter, setTeamFilter] = useState("")
+  const [sortCategory, setSortCategory] = useState("")
+  const [sortDirection, setSortDirection] = useState("desc")
   const [draftPlayerNameFilter, setDraftPlayerNameFilter] = useState("")
   const [draftTeamFilter, setDraftTeamFilter] = useState("")
+  const controlsMenuRef = useRef(null)
   const [playerSummaries, setPlayerSummaries] = useState(() =>
     cachedFavorites.players.reduce((summaries, player) => {
       const summary = readPlayerSummaryCache(player.id)
@@ -268,21 +366,34 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    if (typeof document === "undefined") {
+    if ((!isSortMenuOpen && !isFilterMenuOpen) || typeof window === "undefined") {
       return undefined
     }
 
-    const previousOverflow = document.body.style.overflow
+    function handleOutsideClick(event) {
+      if (!controlsMenuRef.current || controlsMenuRef.current.contains(event.target)) {
+        return
+      }
 
-    if (isFilterModalOpen) {
-      document.body.style.overflow = "hidden"
-      window.scrollTo({ top: 0, behavior: "smooth" })
+      setIsFilterMenuOpen(false)
+      setIsSortMenuOpen(false)
     }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsFilterMenuOpen(false)
+        setIsSortMenuOpen(false)
+      }
+    }
+
+    window.addEventListener("mousedown", handleOutsideClick)
+    window.addEventListener("keydown", handleEscape)
 
     return () => {
-      document.body.style.overflow = previousOverflow
+      window.removeEventListener("mousedown", handleOutsideClick)
+      window.removeEventListener("keydown", handleEscape)
     }
-  }, [isFilterModalOpen])
+  }, [isFilterMenuOpen, isSortMenuOpen])
 
   useEffect(() => {
     setPlayerSummaries(currentSummaries => {
@@ -431,37 +542,70 @@ export default function Home() {
     { id: "teams", label: "Favorite Teams", count: favorites.teams.length },
     { id: "stats", label: "Favorite Stats", count: favorites.stats.length },
   ]
-  const normalizedPlayerNameFilter = playerNameFilter.trim().toLowerCase()
-  const normalizedTeamFilter = teamFilter.trim().toLowerCase()
+  const normalizedPlayerNameFilter = normalizeSearchFilter(playerNameFilter)
   const filteredPlayers = favorites.players.filter(player => {
     const summary = playerSummaries[player.id]
-    const teamText = `${summary?.team?.name || ""} ${summary?.team?.abbreviation || ""}`.trim().toLowerCase()
-    const matchesName = !normalizedPlayerNameFilter || player.name.toLowerCase().includes(normalizedPlayerNameFilter)
-    const matchesTeam = !normalizedTeamFilter || teamText.includes(normalizedTeamFilter)
+    const teamAbbreviation = String(summary?.team?.abbreviation || "").toUpperCase()
+    const matchesName = !normalizedPlayerNameFilter || normalizeSearchFilter(player.name).includes(normalizedPlayerNameFilter)
+    const matchesTeam = !teamFilter || teamAbbreviation === teamFilter
 
     return matchesName && matchesTeam
   })
-  const activeDraftFilterValue = selectedFilter === "team" ? draftTeamFilter : draftPlayerNameFilter
-  const activeDraftFilterLabel = selectedFilter === "team" ? "Team" : "Player Name"
-  const activeDraftFilterPlaceholder = selectedFilter === "team" ? "Search by team" : "Search by player name"
+  const playerOrderMap = new Map(favorites.players.map((player, index) => [player.id, index]))
+  const sortedPlayers = sortCategory
+    ? [...filteredPlayers].sort((leftPlayer, rightPlayer) => {
+      const leftValue = getSortStatValue(playerSummaries[leftPlayer.id], sortCategory)
+      const rightValue = getSortStatValue(playerSummaries[rightPlayer.id], sortCategory)
+      const leftMissing = leftValue == null
+      const rightMissing = rightValue == null
+
+      if (leftMissing && rightMissing) {
+        return (playerOrderMap.get(leftPlayer.id) || 0) - (playerOrderMap.get(rightPlayer.id) || 0)
+      }
+
+      if (leftMissing) {
+        return 1
+      }
+
+      if (rightMissing) {
+        return -1
+      }
+
+      if (leftValue === rightValue) {
+        return (playerOrderMap.get(leftPlayer.id) || 0) - (playerOrderMap.get(rightPlayer.id) || 0)
+      }
+
+      return sortDirection === "asc" ? leftValue - rightValue : rightValue - leftValue
+    })
+    : filteredPlayers
+  const activeSortOption = PLAYER_SORT_OPTIONS.find(option => option.value === sortCategory)
 
   function openFilterModal() {
-    setSelectedFilter("player_name")
+    setIsSortMenuOpen(false)
     setDraftPlayerNameFilter(playerNameFilter)
     setDraftTeamFilter(teamFilter)
-    setIsFilterModalOpen(true)
+    setIsFilterMenuOpen(true)
   }
 
   function closeFilterModal() {
     setDraftPlayerNameFilter(playerNameFilter)
     setDraftTeamFilter(teamFilter)
-    setIsFilterModalOpen(false)
+    setIsFilterMenuOpen(false)
   }
 
   function applyPlayerFilter() {
     setPlayerNameFilter(draftPlayerNameFilter)
     setTeamFilter(draftTeamFilter)
-    setIsFilterModalOpen(false)
+    setIsFilterMenuOpen(false)
+  }
+
+  function toggleFilterMenu() {
+    if (isFilterMenuOpen) {
+      closeFilterModal()
+      return
+    }
+
+    openFilterModal()
   }
 
   function clearPlayerFilter() {
@@ -569,109 +713,6 @@ export default function Home() {
                 </div>
               )}
 
-              {isFilterModalOpen && (
-                <div
-                  className="fixed inset-0 z-40 flex items-start justify-center overflow-hidden rounded-[2rem] bg-slate-950/70 px-4 pt-12 backdrop-blur-sm animate-content-in sm:pt-16"
-                  onClick={closeFilterModal}
-                >
-                  <div
-                    className="max-h-[calc(100vh-4rem)] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl"
-                    onClick={event => event.stopPropagation()}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Filter Players</p>
-                        <h2 className="mt-2 text-2xl font-semibold text-white">Reduce the dashboard layout</h2>
-                        <p className="mt-2 text-sm text-slate-300">
-                          Narrow the visible player cards without changing your saved favorites.
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={closeFilterModal}
-                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 transition-all duration-300 hover:bg-white/10 hover:text-white"
-                      >
-                        Close
-                      </button>
-                    </div>
-
-                    <div className="mt-6">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Filter Selection</p>
-                      <div className="mt-3 flex flex-wrap gap-3">
-                        <button
-                          onClick={() => setSelectedFilter("player_name")}
-                          className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 ${
-                            selectedFilter === "player_name"
-                              ? "border border-blue-400/20 bg-blue-400/10 text-blue-100"
-                              : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >
-                          Player Name
-                        </button>
-                        <button
-                          onClick={() => setSelectedFilter("team")}
-                          className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 ${
-                            selectedFilter === "team"
-                              ? "border border-blue-400/20 bg-blue-400/10 text-blue-100"
-                              : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >
-                          Team
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-6">
-                      <label className="text-xs uppercase tracking-[0.22em] text-slate-400" htmlFor="player-name-filter">
-                        {activeDraftFilterLabel}
-                      </label>
-                      <input
-                        id="player-name-filter"
-                        value={activeDraftFilterValue}
-                        onChange={event => {
-                          if (selectedFilter === "team") {
-                            setDraftTeamFilter(event.target.value)
-                            return
-                          }
-
-                          setDraftPlayerNameFilter(event.target.value)
-                        }}
-                        onKeyDown={event => {
-                          if (event.key === "Enter") {
-                            event.preventDefault()
-                            applyPlayerFilter()
-                          }
-                        }}
-                        placeholder={activeDraftFilterPlaceholder}
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 placeholder:text-slate-500 focus:border-blue-300/40"
-                        autoFocus
-                      />
-                    </div>
-
-                    <div className="mt-6 flex items-center justify-between gap-3">
-                      <p className="text-sm text-slate-400">
-                        Showing {filteredPlayers.length} of {favorites.players.length} players
-                      </p>
-
-                      <div className="flex gap-3">
-                        <button
-                          onClick={clearPlayerFilter}
-                          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-all duration-300 hover:bg-white/10 hover:text-white"
-                        >
-                          Clear
-                        </button>
-                        <button
-                          onClick={applyPlayerFilter}
-                          className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-100"
-                        >
-                          Apply
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div key={activeTab} className="animate-content-in">
                 {activeTab === "players" && (
                   <>
@@ -692,25 +733,151 @@ export default function Home() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <div className="flex justify-start">
+                        <div ref={controlsMenuRef} className="relative flex flex-wrap items-center gap-3">
                           <button
-                            onClick={openFilterModal}
+                            onClick={toggleFilterMenu}
                             className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white"
                           >
                             Filter
                           </button>
+
+                          {isFilterMenuOpen && (
+                            <div className="absolute left-0 top-full z-30 mt-2 w-80 rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl shadow-black/35 backdrop-blur-xl">
+                              <label className="text-xs uppercase tracking-[0.22em] text-slate-400" htmlFor="player-name-filter">
+                                Player Name
+                              </label>
+                              <input
+                                id="player-name-filter"
+                                value={draftPlayerNameFilter}
+                                onChange={event => setDraftPlayerNameFilter(event.target.value)}
+                                onKeyDown={event => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault()
+                                    applyPlayerFilter()
+                                  }
+                                }}
+                                placeholder="Search by player name"
+                                className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition-colors duration-300 placeholder:text-slate-500 focus:border-blue-300/40"
+                                autoFocus
+                              />
+
+                              <label className="mt-4 block text-xs uppercase tracking-[0.22em] text-slate-400" htmlFor="team-filter">
+                                Team
+                              </label>
+                              <div className="mt-2 relative rounded-xl border border-white/15 bg-slate-900 transition-colors duration-300 focus-within:border-blue-300/40">
+                                <select
+                                  id="team-filter"
+                                  value={draftTeamFilter}
+                                  onChange={event => setDraftTeamFilter(event.target.value)}
+                                  className="team-filter-select block w-full appearance-none rounded-xl border-0 bg-slate-900 px-3 py-2 pr-10 text-sm text-white outline-none"
+                                >
+                                  <option value="">All Teams</option>
+                                  {TEAM_FILTER_OPTIONS.map(team => (
+                                    <option key={team.abbreviation} value={team.abbreviation}>
+                                      {team.name} ({team.abbreviation})
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-300" aria-hidden="true">
+                                  ▼
+                                </span>
+                              </div>
+
+                              <p className="mt-4 text-xs text-slate-400">
+                                Showing {filteredPlayers.length} of {favorites.players.length} players
+                              </p>
+
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  onClick={clearPlayerFilter}
+                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition-colors duration-200 hover:bg-white/10"
+                                >
+                                  Clear
+                                </button>
+                                <button
+                                  onClick={applyPlayerFilter}
+                                  className="ml-auto rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-950 transition-colors duration-200 hover:bg-slate-100"
+                                >
+                                  Apply
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setIsFilterMenuOpen(false)
+                              setIsSortMenuOpen(current => !current)
+                            }}
+                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white"
+                          >
+                            Sort{activeSortOption ? `: ${activeSortOption.label} ${sortDirection === "asc" ? "↑" : "↓"}` : ""}
+                          </button>
+
+                          {isSortMenuOpen && (
+                            <div className="absolute left-0 top-full z-30 mt-2 w-72 rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl shadow-black/35 backdrop-blur-xl">
+                              <label className="text-xs uppercase tracking-[0.22em] text-slate-400" htmlFor="sort-category">
+                                Stat Category
+                              </label>
+                              <select
+                                id="sort-category"
+                                value={sortCategory}
+                                onChange={event => setSortCategory(event.target.value)}
+                                className="mt-2 block w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-300/40"
+                              >
+                                <option value="">Default</option>
+                                {PLAYER_SORT_OPTIONS.map(option => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  onClick={() => setSortDirection("desc")}
+                                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
+                                    sortDirection === "desc"
+                                      ? "border border-cyan-300/70 bg-cyan-300 text-slate-950 shadow-md shadow-cyan-400/25"
+                                      : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                                  }`}
+                                >
+                                  ↓
+                                </button>
+                                <button
+                                  onClick={() => setSortDirection("asc")}
+                                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
+                                    sortDirection === "asc"
+                                      ? "border border-cyan-300/70 bg-cyan-300 text-slate-950 shadow-md shadow-cyan-400/25"
+                                      : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                                  }`}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSortCategory("")
+                                    setSortDirection("desc")
+                                  }}
+                                  className="ml-auto rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition-colors duration-200 hover:bg-white/10"
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {filteredPlayers.length === 0 ? (
                           <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-slate-900/40 p-10 text-center text-slate-300 animate-content-in">
                             <h2 className="text-2xl font-semibold text-white">No players match this filter</h2>
                             <p className="mt-2 text-sm">
-                              Update the player name search in the filter modal to bring cards back into the layout.
+                              Update the player name or team filter to bring cards back into the layout.
                             </p>
                           </div>
                         ) : (
                           <div className="grid gap-5 min-[1700px]:grid-cols-2">
-                            {filteredPlayers.map(player => (
+                            {sortedPlayers.map(player => (
                               <div
                                 key={player.id}
                                 className="transform-gpu transition-all duration-300 ease-out animate-content-in"

@@ -1,0 +1,977 @@
+MongoDB connected on attempt 1.
+Nightly refresh started.
+Refresh check failed for 1641789: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Refresh check failed for 1626158: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Refresh check failed for 1641720: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Queued 363 tracked players for refresh. Skipped 272. Failed checks 3. Forced queued after failed checks 3.
+Worker started.
+Fetching player_id: 1642893
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642947
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642926
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642850
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642365
+Fetch failed: 404: Career stats unavailable
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642379
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642385
+Fetch failed: 'resultSet'
+Fetching player_id: 1642843
+Stored: 1642843
+Fetching player_id: 201950
+Stored: 201950
+Fetching player_id: 1629611
+Stored: 1629611
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1627780
+Stored: 1627780
+Fetching player_id: 203939
+Stored: 203939
+Fetching player_id: 1629632
+Stored: 1629632
+Fetching player_id: 1630173
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 203500
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628389
+Stored: 1628389
+Fetching player_id: 1630534
+Stored: 1630534
+Fetching player_id: 1630583
+Stored: 1630583
+Fetching player_id: 1641725
+Stored: 1641725
+Fetching player_id: 1629638
+Stored: 1629638
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628960
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 1628386
+Stored: 1628386
+Fetching player_id: 1630631
+Stored: 1630631
+Fetching player_id: 203937
+Stored: 203937
+Fetching player_id: 203507
+Stored: 203507
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203648
+Stored: 203648
+Fetching player_id: 1630175
+Stored: 1630175
+Fetching player_id: 1628384
+Stored: 1628384
+Fetching player_id: 1630166
+Stored: 1630166
+Fetching player_id: 1629028
+Stored: 1629028
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628963
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 2688
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 1642893
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642947
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642926
+Fetch failed: 404: Career stats unavailable
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642850
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642365
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642379
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642385
+Fetch failed: 'resultSet'
+Fetching player_id: 1630173
+Stored: 1630173
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630163
+Stored: 1630163
+Fetching player_id: 1630217
+Stored: 1630217
+Fetching player_id: 1631230
+Stored: 1631230
+Fetching player_id: 203084
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 203500
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630567
+Stored: 1630567
+Fetching player_id: 1629628
+Stored: 1629628
+Fetching player_id: 1629646
+Stored: 1629646
+Fetching player_id: 1642419
+Stored: 1642419
+Fetching player_id: 201587
+Stored: 201587
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203078
+Stored: 203078
+Fetching player_id: 1630180
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 1628960
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 1628963
+Stored: 1628963
+Fetching player_id: 1629048
+Stored: 1629048
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 202687
+Stored: 202687
+Fetching player_id: 1641710
+Stored: 1641710
+Fetching player_id: 203992
+Stored: 203992
+Fetching player_id: 1641737
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 2688
+Fetch failed: 'resultSet'
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642893
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642947
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642926
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642850
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642365
+Fetch failed: 404: Career stats unavailable
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642379
+Fetch failed: 404: Career stats unavailable
+Fetching player_id: 1642385
+Fetch failed: 'resultSet'
+Fetching player_id: 1626164
+Stored: 1626164
+Fetching player_id: 1628449
+Stored: 1628449
+Fetching player_id: 1628396
+Stored: 1628396
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631103
+Stored: 1631103
+Fetching player_id: 1628969
+Stored: 1628969
+Fetching player_id: 1628970
+Stored: 1628970
+Fetching player_id: 1628415
+Stored: 1628415
+Fetching player_id: 1628971
+Stored: 1628971
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1627759
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 2220
+Fetch failed: HTTPSConnectionPool(host='stats.nba.com', port=443): Read timed out. (read timeout=60)
+Fetching player_id: 78
+Fetch failed: Expecting value: line 1 column 1 (char 0)
+Fetching player_id: 203500
+Stored: 203500
+Fetching player_id: 203084
+Stored: 203084
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630180
+Stored: 1630180
+Fetching player_id: 1641738
+Stored: 1641738
+Fetching player_id: 202710
+Stored: 202710
+Fetching player_id: 1641824
+Stored: 1641824
+Fetching player_id: 1631288
+Stored: 1631288
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203484
+Stored: 203484
+Fetching player_id: 1641739
+Stored: 1641739
+Fetching player_id: 1642382
+Stored: 1642382
+Fetching player_id: 1642267
+Stored: 1642267
+Fetching player_id: 1642269
+Stored: 1642269
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628975
+Stored: 1628975
+Fetching player_id: 1628976
+Stored: 1628976
+Fetching player_id: 1627936
+Stored: 1627936
+Fetching player_id: 1642264
+Stored: 1642264
+Fetching player_id: 1630658
+Stored: 1630658
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630551
+Stored: 1630551
+Fetching player_id: 1642353
+Stored: 1642353
+Fetching player_id: 1631108
+Stored: 1631108
+Fetching player_id: 1631321
+Stored: 1631321
+Fetching player_id: 1642270
+Stored: 1642270
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641730
+Stored: 1641730
+Fetching player_id: 1642268
+Stored: 1642268
+Fetching player_id: 1630536
+Stored: 1630536
+Fetching player_id: 1641731
+Stored: 1641731
+Fetching player_id: 1642384
+Stored: 1642384
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630595
+Stored: 1630595
+Fetching player_id: 1630700
+Stored: 1630700
+Fetching player_id: 1642368
+Stored: 1642368
+Fetching player_id: 203076
+Stored: 203076
+Fetching player_id: 1631120
+Stored: 1631120
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 201942
+Stored: 201942
+Fetching player_id: 1642484
+Stored: 1642484
+Fetching player_id: 1628978
+Stored: 1628978
+Fetching player_id: 1631217
+Stored: 1631217
+Fetching player_id: 1641711
+Stored: 1641711
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1627739
+Stored: 1627739
+Fetching player_id: 1642346
+Stored: 1642346
+Fetching player_id: 201142
+Stored: 201142
+Fetching player_id: 1631105
+Stored: 1631105
+Fetching player_id: 1641744
+Stored: 1641744
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630162
+Stored: 1630162
+Fetching player_id: 1642348
+Stored: 1642348
+Fetching player_id: 1631165
+Stored: 1631165
+Fetching player_id: 203954
+Stored: 203954
+Fetching player_id: 1630623
+Stored: 1630623
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1629234
+Stored: 1629234
+Fetching player_id: 1641787
+Stored: 1641787
+Fetching player_id: 1642280
+Stored: 1642280
+Fetching player_id: 1631323
+Stored: 1631323
+Fetching player_id: 1628368
+Stored: 1628368
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642402
+Stored: 1642402
+Fetching player_id: 1642277
+Stored: 1642277
+Fetching player_id: 1629655
+Stored: 1629655
+Fetching player_id: 1629636
+Stored: 1629636
+Fetching player_id: 1630568
+Stored: 1630568
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641718
+Stored: 1641718
+Fetching player_id: 1642273
+Stored: 1642273
+Fetching player_id: 202331
+Stored: 202331
+Fetching player_id: 1630581
+Stored: 1630581
+Fetching player_id: 1628983
+Stored: 1628983
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630264
+Stored: 1630264
+Fetching player_id: 1631221
+Stored: 1631221
+Fetching player_id: 203497
+Stored: 203497
+Fetching player_id: 203924
+Stored: 203924
+Fetching player_id: 1631260
+Stored: 1631260
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203110
+Stored: 203110
+Fetching player_id: 1630224
+Stored: 1630224
+Fetching player_id: 1629750
+Stored: 1629750
+Fetching player_id: 1628960
+Stored: 1628960
+Fetching player_id: 201145
+Stored: 201145
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630182
+Stored: 1630182
+Fetching player_id: 1629656
+Stored: 1629656
+Fetching player_id: 1631243
+Stored: 1631243
+Fetching player_id: 1629060
+Stored: 1629060
+Fetching player_id: 1641790
+Stored: 1641790
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203501
+Stored: 203501
+Fetching player_id: 201935
+Stored: 201935
+Fetching player_id: 1631199
+Stored: 1631199
+Fetching player_id: 203914
+Stored: 203914
+Fetching player_id: 202699
+Stored: 202699
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628404
+Stored: 1628404
+Fetching player_id: 1628392
+Stored: 1628392
+Fetching player_id: 1630573
+Stored: 1630573
+Fetching player_id: 1641722
+Stored: 1641722
+Fetching player_id: 1629637
+Stored: 1629637
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628502
+Stored: 1628502
+Fetching player_id: 1630703
+Stored: 1630703
+Fetching player_id: 1641707
+Stored: 1641707
+Fetching player_id: 1629639
+Stored: 1629639
+Fetching player_id: 1627741
+Stored: 1627741
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1629312
+Stored: 1629312
+Fetching player_id: 1628988
+Stored: 1628988
+Fetching player_id: 1631096
+Stored: 1631096
+Fetching player_id: 201143
+Stored: 201143
+Fetching player_id: 1631216
+Stored: 1631216
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641724
+Stored: 1641724
+Fetching player_id: 1628989
+Stored: 1628989
+Fetching player_id: 1630643
+Stored: 1630643
+Fetching player_id: 1630574
+Stored: 1630574
+Fetching player_id: 1629631
+Stored: 1629631
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630538
+Stored: 1630538
+Fetching player_id: 1642345
+Stored: 1642345
+Fetching player_id: 204060
+Stored: 204060
+Fetching player_id: 1627742
+Stored: 1627742
+Fetching player_id: 1631127
+Stored: 1631127
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628371
+Stored: 1628371
+Fetching player_id: 1631245
+Stored: 1631245
+Fetching player_id: 1641748
+Stored: 1641748
+Fetching player_id: 1631218
+Stored: 1631218
+Fetching player_id: 1642355
+Stored: 1642355
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 2544
+Stored: 2544
+Fetching player_id: 1631170
+Stored: 1631170
+Fetching player_id: 1641998
+Stored: 1641998
+Fetching player_id: 1642450
+Stored: 1642450
+Fetching player_id: 1629660
+Stored: 1629660
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630198
+Stored: 1630198
+Fetching player_id: 1629661
+Stored: 1629661
+Fetching player_id: 1630552
+Stored: 1630552
+Fetching player_id: 1629640
+Stored: 1629640
+Fetching player_id: 1642352
+Stored: 1642352
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630529
+Stored: 1630529
+Fetching player_id: 1642403
+Stored: 1642403
+Fetching player_id: 1642461
+Stored: 1642461
+Fetching player_id: 1630200
+Stored: 1630200
+Fetching player_id: 1626145
+Stored: 1626145
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1627884
+Stored: 1627884
+Fetching player_id: 201599
+Stored: 201599
+Fetching player_id: 1631107
+Stored: 1631107
+Fetching player_id: 1628379
+Stored: 1628379
+Fetching player_id: 1630557
+Stored: 1630557
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628467
+Stored: 1628467
+Fetching player_id: 1641752
+Stored: 1641752
+Fetching player_id: 1642261
+Stored: 1642261
+Fetching player_id: 1642278
+Stored: 1642278
+Fetching player_id: 1631132
+Stored: 1631132
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1629723
+Stored: 1629723
+Fetching player_id: 1628436
+Stored: 1628436
+Fetching player_id: 1630249
+Stored: 1630249
+Fetching player_id: 1630228
+Stored: 1630228
+Fetching player_id: 1628398
+Stored: 1628398
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631222
+Stored: 1631222
+Fetching player_id: 203897
+Stored: 203897
+Fetching player_id: 1629111
+Stored: 1629111
+Fetching player_id: 1630639
+Stored: 1630639
+Fetching player_id: 1627747
+Stored: 1627747
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630604
+Stored: 1630604
+Fetching player_id: 1641726
+Stored: 1641726
+Fetching player_id: 1630587
+Stored: 1630587
+Fetching player_id: 1641753
+Stored: 1641753
+Fetching player_id: 1626172
+Stored: 1626172
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 201572
+Stored: 201572
+Fetching player_id: 201567
+Stored: 201567
+Fetching player_id: 1628374
+Stored: 1628374
+Fetching player_id: 1630230
+Stored: 1630230
+Fetching player_id: 1628997
+Stored: 1628997
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1628998
+Stored: 1628998
+Fetching player_id: 1631213
+Stored: 1631213
+Fetching player_id: 1631255
+Stored: 1631255
+Fetching player_id: 1630178
+Stored: 1630178
+Fetching player_id: 1630540
+Stored: 1630540
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642272
+Stored: 1642272
+Fetching player_id: 1630644
+Stored: 1630644
+Fetching player_id: 203468
+Stored: 203468
+Fetching player_id: 204456
+Stored: 204456
+Fetching player_id: 1641755
+Stored: 1641755
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630183
+Stored: 1630183
+Fetching player_id: 203926
+Stored: 203926
+Fetching player_id: 1631121
+Stored: 1631121
+Fetching player_id: 1629162
+Stored: 1629162
+Fetching player_id: 1630241
+Stored: 1630241
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203114
+Stored: 203114
+Fetching player_id: 1641706
+Stored: 1641706
+Fetching player_id: 1641801
+Stored: 1641801
+Fetching player_id: 1631159
+Stored: 1631159
+Fetching player_id: 1642434
+Stored: 1642434
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631169
+Stored: 1631169
+Fetching player_id: 1642274
+Stored: 1642274
+Fetching player_id: 1642349
+Stored: 1642349
+Fetching player_id: 1630558
+Stored: 1630558
+Fetching player_id: 1628378
+Stored: 1628378
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630596
+Stored: 1630596
+Fetching player_id: 1642367
+Stored: 1642367
+Fetching player_id: 1628370
+Stored: 1628370
+Fetching player_id: 1630541
+Stored: 1630541
+Fetching player_id: 1629630
+Stored: 1629630
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630530
+Stored: 1630530
+Fetching player_id: 1627749
+Stored: 1627749
+Fetching player_id: 1627750
+Stored: 1627750
+Fetching player_id: 1631099
+Stored: 1631099
+Fetching player_id: 1631200
+Stored: 1631200
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1626204
+Stored: 1626204
+Fetching player_id: 1629614
+Stored: 1629614
+Fetching player_id: 1630174
+Stored: 1630174
+Fetching player_id: 1630192
+Stored: 1630192
+Fetching player_id: 1629006
+Stored: 1629006
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630168
+Stored: 1630168
+Fetching player_id: 1630171
+Stored: 1630171
+Fetching player_id: 203482
+Stored: 203482
+Fetching player_id: 101108
+Stored: 101108
+Fetching player_id: 1641809
+Stored: 1641809
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641763
+Stored: 1641763
+Fetching player_id: 1629618
+Stored: 1629618
+Fetching player_id: 1630590
+Stored: 1630590
+Fetching player_id: 1631342
+Stored: 1631342
+Fetching player_id: 1629673
+Stored: 1629673
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641854
+Stored: 1641854
+Fetching player_id: 1629645
+Stored: 1629645
+Fetching player_id: 1629008
+Stored: 1629008
+Fetching player_id: 1626171
+Stored: 1626171
+Fetching player_id: 204001
+Stored: 204001
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642366
+Stored: 1642366
+Fetching player_id: 1630202
+Stored: 1630202
+Fetching player_id: 1641765
+Stored: 1641765
+Fetching player_id: 1629674
+Stored: 1629674
+Fetching player_id: 1630193
+Stored: 1630193
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203944
+Stored: 203944
+Fetching player_id: 1641871
+Stored: 1641871
+Fetching player_id: 1630559
+Stored: 1630559
+Fetching player_id: 1630194
+Stored: 1630194
+Fetching player_id: 1641810
+Stored: 1641810
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1629675
+Stored: 1629675
+Fetching player_id: 1630208
+Stored: 1630208
+Fetching player_id: 1642258
+Stored: 1642258
+Fetching player_id: 1629130
+Stored: 1629130
+Fetching player_id: 1629011
+Stored: 1629011
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631115
+Stored: 1631115
+Fetching player_id: 1630526
+Stored: 1630526
+Fetching player_id: 1631157
+Stored: 1631157
+Fetching player_id: 1641712
+Stored: 1641712
+Fetching player_id: 1626156
+Stored: 1626156
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642275
+Stored: 1642275
+Fetching player_id: 1642259
+Stored: 1642259
+Fetching player_id: 1631204
+Stored: 1631204
+Fetching player_id: 1631248
+Stored: 1631248
+Fetching player_id: 203471
+Stored: 203471
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630578
+Stored: 1630578
+Fetching player_id: 1641729
+Stored: 1641729
+Fetching player_id: 1629012
+Stored: 1629012
+Fetching player_id: 1629013
+Stored: 1629013
+Fetching player_id: 1630545
+Stored: 1630545
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641767
+Stored: 1641767
+Fetching player_id: 1642263
+Stored: 1642263
+Fetching player_id: 1627783
+Stored: 1627783
+Fetching player_id: 1629014
+Stored: 1629014
+Fetching player_id: 1642354
+Stored: 1642354
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630579
+Stored: 1630579
+Fetching player_id: 203935
+Stored: 203935
+Fetching player_id: 1630696
+Stored: 1630696
+Fetching player_id: 1630188
+Stored: 1630188
+Fetching player_id: 1631095
+Stored: 1631095
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641733
+Stored: 1641733
+Fetching player_id: 1631110
+Stored: 1631110
+Fetching player_id: 1642285
+Stored: 1642285
+Fetching player_id: 1641815
+Stored: 1641815
+Fetching player_id: 1630191
+Stored: 1630191
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631124
+Stored: 1631124
+Fetching player_id: 1629622
+Stored: 1629622
+Fetching player_id: 1630591
+Stored: 1630591
+Fetching player_id: 1630256
+Stored: 1630256
+Fetching player_id: 1628369
+Stored: 1628369
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 202066
+Stored: 202066
+Fetching player_id: 1631207
+Stored: 1631207
+Fetching player_id: 1630560
+Stored: 1630560
+Fetching player_id: 1641708
+Stored: 1641708
+Fetching player_id: 1641709
+Stored: 1641709
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 202691
+Stored: 202691
+Fetching player_id: 1629680
+Stored: 1629680
+Fetching player_id: 1630214
+Stored: 1630214
+Fetching player_id: 1641772
+Stored: 1641772
+Fetching player_id: 1631210
+Stored: 1631210
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1630167
+Stored: 1630167
+Fetching player_id: 1626157
+Stored: 1626157
+Fetching player_id: 1629018
+Stored: 1629018
+Fetching player_id: 1631131
+Stored: 1631131
+Fetching player_id: 1626167
+Stored: 1626167
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641816
+Stored: 1641816
+Fetching player_id: 1629020
+Stored: 1629020
+Fetching player_id: 1641737
+Stored: 1641737
+Fetching player_id: 1630170
+Stored: 1630170
+Fetching player_id: 1629216
+Stored: 1629216
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641774
+Stored: 1641774
+Fetching player_id: 202696
+Stored: 202696
+Fetching player_id: 1629731
+Stored: 1629731
+Fetching player_id: 1630532
+Stored: 1630532
+Fetching player_id: 1629021
+Stored: 1629021
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631133
+Stored: 1631133
+Fetching player_id: 1641716
+Stored: 1641716
+Fetching player_id: 1641717
+Stored: 1641717
+Fetching player_id: 1630811
+Stored: 1630811
+Fetching player_id: 1641775
+Stored: 1641775
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1642266
+Stored: 1642266
+Fetching player_id: 1642276
+Stored: 1642276
+Fetching player_id: 1629023
+Stored: 1629023
+Fetching player_id: 1630322
+Stored: 1630322
+Fetching player_id: 1630570
+Stored: 1630570
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631212
+Stored: 1631212
+Fetching player_id: 1642377
+Stored: 1642377
+Fetching player_id: 1641705
+Stored: 1641705
+Fetching player_id: 1631104
+Stored: 1631104
+Fetching player_id: 201566
+Stored: 201566
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 203952
+Stored: 203952
+Fetching player_id: 1630314
+Stored: 1630314
+Fetching player_id: 1642262
+Stored: 1642262
+Fetching player_id: 1629684
+Stored: 1629684
+Fetching player_id: 1631114
+Stored: 1631114
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1631119
+Stored: 1631119
+Fetching player_id: 1629026
+Stored: 1629026
+Fetching player_id: 1631109
+Stored: 1631109
+Fetching player_id: 1630172
+Stored: 1630172
+Fetching player_id: 1630533
+Stored: 1630533
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1629057
+Stored: 1629057
+Fetching player_id: 1631246
+Stored: 1631246
+Fetching player_id: 1629627
+Stored: 1629627
+Fetching player_id: 1630592
+Stored: 1630592
+Fetching player_id: 1630164
+Stored: 1630164
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1627824
+Stored: 1627824
+Fetching player_id: 1642443
+Stored: 1642443
+Fetching player_id: 1629027
+Stored: 1629027
+Fetching player_id: 1627826
+Stored: 1627826
+Fetching player_id: 1641783
+Stored: 1641783
+Processed 5 players this run.
+Worker started.
+Fetching player_id: 1641789
+Stored: 1641789
+Fetching player_id: 1626158
+Stored: 1626158
+Fetching player_id: 1641720
+Stored: 1641720
+Processed 3 players this run.
+Worker started.
+Processed 0 players this run.
+Nightly refresh finished. Total processed: 403

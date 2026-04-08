@@ -30,11 +30,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from nba import search_player_stats, build_player_summary
+from nba import search_player_stats, search_player_matches, build_player_summary
 
 @app.get("/search/players/{name}")
 def search_player(name: str):
     return search_player_stats(name)
+
+
+@app.get("/search/players/matches/{name}")
+def search_player_name_matches(name: str, limit: int = 25):
+    return search_player_matches(name, limit)
 
 # ---------------------------
 # AUTH
