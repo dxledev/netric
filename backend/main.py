@@ -13,14 +13,14 @@ from auth import (
     remove_favorite_player
 )
 
-from database import db
+from database import fetch_queue_collection, player_cache_collection
 
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
-# Mongo collection
-player_cache = db["player_cache"]
-fetch_queue = db["fetch_queue"]
+# Mongo collections
+player_cache = player_cache_collection
+fetch_queue = fetch_queue_collection
 
 app.add_middleware(
     CORSMiddleware,

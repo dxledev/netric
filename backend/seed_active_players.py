@@ -1,10 +1,10 @@
 import time
-from database import db
+from database import fetch_queue_collection, player_cache_collection
 from services.cache_status import has_complete_cached_season_logs
 from services.player_pool import get_tracked_players
 
-fetch_queue = db["fetch_queue"]
-player_cache = db["player_cache"]
+fetch_queue = fetch_queue_collection
+player_cache = player_cache_collection
 
 def seed_active_players():
     tracked_players = get_tracked_players()

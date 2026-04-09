@@ -1,12 +1,12 @@
 import os
 from datetime import UTC, datetime, timedelta
 
-from database import db
+from database import fetch_queue_collection, player_cache_collection
 from nba import SUMMARY_VERSION, build_player_summary_from_data
 from services.fetch_service import fetch_player_data
 
-player_cache = db["player_cache"]
-fetch_queue = db["fetch_queue"]
+player_cache = player_cache_collection
+fetch_queue = fetch_queue_collection
 
 MAX_PER_RUN = int(os.getenv("FETCH_WORKER_MAX_PER_RUN", "5"))
 RETRY_DELAY_SECONDS = int(os.getenv("FETCH_WORKER_RETRY_DELAY_SECONDS", "900"))

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from database import db
+from database import fetch_queue_collection, player_cache_collection
 from services.cache_status import has_complete_cached_season_logs
 from services.fetch_service import (
     get_latest_cached_game_date,
@@ -8,8 +8,8 @@ from services.fetch_service import (
 )
 from services.player_pool import get_tracked_players
 
-player_cache = db["player_cache"]
-fetch_queue = db["fetch_queue"]
+player_cache = player_cache_collection
+fetch_queue = fetch_queue_collection
 
 
 def build_refresh_job(player_id, name):

@@ -6,10 +6,10 @@ import pandas as pd
 from fastapi import HTTPException
 from nba_api.stats.static import players
 
-from database import db
+from database import fetch_queue_collection, player_cache_collection
 
-player_cache = db["player_cache"]
-fetch_queue = db["fetch_queue"]
+player_cache = player_cache_collection
+fetch_queue = fetch_queue_collection
 SUMMARY_VERSION = 4
 ACTIVE_PLAYER_MATCHES_ONLY = True
 

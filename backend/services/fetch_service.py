@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 from nba_api.stats.endpoints import playercareerstats, playergamelog
 from nba_api.stats.static import players
 
-from database import db
+from database import player_cache_collection
 from services.season_policy import select_season_ids_for_storage
 
-player_cache = db["player_cache"]
+player_cache = player_cache_collection
 NBA_API_TIMEOUT_SECONDS = int(os.getenv("NBA_API_TIMEOUT_SECONDS", "60"))
 NBA_API_RETRY_ATTEMPTS = int(os.getenv("NBA_API_RETRY_ATTEMPTS", "3"))
 NBA_API_RETRY_DELAY_SECONDS = float(os.getenv("NBA_API_RETRY_DELAY_SECONDS", "2"))
