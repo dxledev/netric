@@ -43,9 +43,6 @@ export default function PlayerSummaryCard({
       setSummary(cachedSummary)
       setLoading(false)
       setNotCached(false)
-      if (onSummaryLoaded) {
-        onSummaryLoaded(player.id, cachedSummary)
-      }
       return undefined
     }
 
@@ -64,9 +61,6 @@ export default function PlayerSummaryCard({
         setLoading(false)
         setNotCached(false)
         writePlayerSummaryCache(player.id, res.data)
-        if (onSummaryLoaded) {
-          onSummaryLoaded(player.id, res.data)
-        }
 
         if (intervalId) {
           clearInterval(intervalId)
@@ -102,7 +96,7 @@ export default function PlayerSummaryCard({
         clearInterval(intervalId)
       }
     }
-  }, [onSummaryLoaded, player.id])
+  }, [player.id])
 
   useEffect(() => {
     if (summary && onSummaryLoaded) {

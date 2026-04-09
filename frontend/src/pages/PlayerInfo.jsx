@@ -146,10 +146,15 @@ export default function PlayerInfo() {
 
   useEffect(() => {
     const nextCachedSummary = readPlayerSummaryCache(id)
-    let ignore = false
 
     setData(nextCachedSummary)
-    setLoading(!nextCachedSummary)
+    if (nextCachedSummary) {
+      setLoading(false)
+      return undefined
+    }
+
+    setLoading(true)
+    let ignore = false
 
     axios
       .get(`${API_BASE}/player/${id}/summary`)
