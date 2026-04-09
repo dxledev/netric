@@ -1,8 +1,46 @@
 const PLAYER_SUMMARY_CACHE_TTL = 1000 * 60 * 30
 const PLAYER_SUMMARY_CACHE_VERSION = 3
+const summaryMemoryCache = new Map()
 
 export function getPlayerSummaryCacheKey(playerId) {
   return `netric:player-summary:${playerId}`
+}
+
+function isCacheEntryValid(cacheEntry) {
+  return (
+    Boolean(cacheEntry?.timestamp) &&
+    cacheEntry.version === PLAYER_SUMMARY_CACHE_VERSION &&
+    Date.now() - cacheEntry.timestamp <= PLAYER_SUMMARY_CACHE_TTL
+  )
+}
+
+function readFromStorage(storage, cacheKey) {
+  if (!storage) {
+    return null
+  }
+
+  const rawCache = storage.getItem(cacheKey)
+
+  if (!rawCache) {
+    return null
+  }
+
+  const parsedCache = JSON.parse(rawCache)
+
+  if (!isCacheEntryValid(parsedCache)) {
+    storage.removeItem(cacheKey)
+    return null
+  }
+
+  return parsedCache
+}
+
+function getStorageTargets() {
+  if (typeof window === "undefined") {
+    return []
+  }
+
+  return [window.localStorage, window.sessionStorage]
 }
 
 export function readPlayerSummaryCache(playerId) {
@@ -10,25 +48,30 @@ export function readPlayerSummaryCache(playerId) {
     return null
   }
 
+  const cacheKey = getPlayerSummaryCacheKey(playerId)
+
   try {
-    const rawCache = window.localStorage.getItem(getPlayerSummaryCacheKey(playerId))
+    const memoryCache = summaryMemoryCache.get(cacheKey)
 
-    if (!rawCache) {
-      return null
+    if (isCacheEntryValid(memoryCache)) {
+      return memoryCache.data ?? null
     }
 
-    const parsedCache = JSON.parse(rawCache)
+    summaryMemoryCache.delete(cacheKey)
+    const storages = getStorageTargets()
 
-    if (
-      !parsedCache?.timestamp ||
-      parsedCache.version !== PLAYER_SUMMARY_CACHE_VERSION ||
-      Date.now() - parsedCache.timestamp > PLAYER_SUMMARY_CACHE_TTL
-    ) {
-      window.localStorage.removeItem(getPlayerSummaryCacheKey(playerId))
-      return null
+    for (const storage of storages) {
+      const cacheEntry = readFromStorage(storage, cacheKey)
+
+      if (!cacheEntry) {
+        continue
+      }
+
+      summaryMemoryCache.set(cacheKey, cacheEntry)
+      return cacheEntry.data ?? null
     }
 
-    return parsedCache.data ?? null
+    return null
   } catch (error) {
     console.error("Failed to read player summary cache", error)
     return null
@@ -40,17 +83,25 @@ export function writePlayerSummaryCache(playerId, summary) {
     return
   }
 
+  const cacheKey = getPlayerSummaryCacheKey(playerId)
+  const cacheEntry = {
+    timestamp: Date.now(),
+    version: PLAYER_SUMMARY_CACHE_VERSION,
+    data: summary,
+  }
+
+  summaryMemoryCache.set(cacheKey, cacheEntry)
+
+  const serializedEntry = JSON.stringify(cacheEntry)
+
   try {
-    window.localStorage.setItem(
-      getPlayerSummaryCacheKey(playerId),
-      JSON.stringify({
-        timestamp: Date.now(),
-        version: PLAYER_SUMMARY_CACHE_VERSION,
-        data: summary,
-      })
-    )
+    window.localStorage.setItem(cacheKey, serializedEntry)
   } catch (error) {
-    console.error("Failed to write player summary cache", error)
+    try {
+      window.sessionStorage.setItem(cacheKey, serializedEntry)
+    } catch (sessionError) {
+      console.error("Failed to write player summary cache", sessionError)
+    }
   }
 }
 
@@ -59,5 +110,9 @@ export function clearPlayerSummaryCache(playerId) {
     return
   }
 
-  window.localStorage.removeItem(getPlayerSummaryCacheKey(playerId))
+  const cacheKey = getPlayerSummaryCacheKey(playerId)
+
+  summaryMemoryCache.delete(cacheKey)
+  window.localStorage.removeItem(cacheKey)
+  window.sessionStorage.removeItem(cacheKey)
 }
