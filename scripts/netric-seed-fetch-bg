@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME="netric-seed-fetch-bg"
+NETRIC_BACKEND_DIR="/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend"
+DEFAULT_PYTHON_BIN="${NETRIC_BACKEND_DIR}/venv/bin/python"
+FALLBACK_PYTHON_BIN="/usr/bin/python3"
+DEFAULT_SEASON_IDS=""
+DEFAULT_SLEEP_SECONDS="2"
+PID_FILE="/tmp/netric-seed-fetch.pid"
+LOG_DIR="${NETRIC_BACKEND_DIR}/logs"
+
+usage() {
+  /usr/bin/cat <<USAGE
+Usage: ${SCRIPT_NAME} [start|status|stop] [options]
+
+Commands:
+  start                 Seed active players and fetch queue to completion (default)
+  status                Show running status
+  stop                  Stop running job
+
+Options (for start):
+  --season-ids <ids>    Comma-separated seasons (default: all available)
+  --sleep-seconds <n>   Delay between worker runs (default: ${DEFAULT_SLEEP_SECONDS})
+  --dry-run             Print planned command without starting
+  -h, --help            Show this help
+USAGE
+}
+
+announce() {
+  local title="$1"
+  local body="$2"
+
+  if [ -x /usr/bin/notify-send ]; then
+    /usr/bin/notify-send "$title" "$body"
+  fi
+
+  /usr/bin/printf '%s\n' "$body"
+}
+
+resolve_python_bin() {
+  if [ -x "$DEFAULT_PYTHON_BIN" ]; then
+    /usr/bin/printf '%s\n' "$DEFAULT_PYTHON_BIN"
+    return
+  fi
+
+  /usr/bin/printf '%s\n' "$FALLBACK_PYTHON_BIN"
+}
+
+is_running() {
+  if [ ! -f "$PID_FILE" ]; then
+    return 1
+  fi
+
+  local pid
+  pid="$(/usr/bin/cat "$PID_FILE")"
+
+  if [ -z "$pid" ]; then
+    return 1
+  fi
+
+  if /usr/bin/kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+start_job() {
+  local dry_run="false"
+  local season_ids="$DEFAULT_SEASON_IDS"
+  local sleep_seconds="$DEFAULT_SLEEP_SECONDS"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run)
+        dry_run="true"
+        ;;
+      --season-ids)
+        if [ "$#" -lt 2 ] || [ -z "${2:-}" ]; then
+          /usr/bin/printf 'Error: --season-ids requires a value\n' >&2
+          exit 2
+        fi
+        season_ids="$2"
+        shift
+        ;;
+      --sleep-seconds)
+        if [ "$#" -lt 2 ] || [ -z "${2:-}" ]; then
+          /usr/bin/printf 'Error: --sleep-seconds requires a value\n' >&2
+          exit 2
+        fi
+        if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+          /usr/bin/printf 'Error: --sleep-seconds must be an integer\n' >&2
+          exit 2
+        fi
+        sleep_seconds="$2"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        /usr/bin/printf 'Error: unknown option: %s\n' "$1" >&2
+        usage
+        exit 2
+        ;;
+    esac
+    shift
+  done
+
+  if [ ! -d "$NETRIC_BACKEND_DIR" ]; then
+    /usr/bin/printf 'Error: backend directory not found: %s\n' "$NETRIC_BACKEND_DIR" >&2
+    exit 1
+  fi
+
+  if is_running; then
+    local active_pid
+    active_pid="$(/usr/bin/cat "$PID_FILE")"
+    announce "Netric Seed+Fetch" "Already running (pid ${active_pid})"
+    exit 0
+  fi
+
+  /usr/bin/mkdir -p "$LOG_DIR"
+
+  local timestamp
+  timestamp="$(/usr/bin/date +%Y%m%d-%H%M%S)"
+  local log_file
+  log_file="${LOG_DIR}/seed-fetch-${timestamp}.log"
+
+  local python_bin
+  python_bin="$(resolve_python_bin)"
+
+  if [ "$dry_run" = "true" ]; then
+    if [ -n "$season_ids" ]; then
+      /usr/bin/printf 'Dry-run: seed+fetch with NBA_SEASON_IDS_TO_STORE=%s sleep=%s\n' "$season_ids" "$sleep_seconds"
+    else
+      /usr/bin/printf 'Dry-run: seed+fetch with NBA_SEASON_IDS_TO_STORE unset (all available) sleep=%s\n' "$sleep_seconds"
+    fi
+    /usr/bin/printf 'Log file: %s\n' "$log_file"
+    exit 0
+  fi
+
+  local season_env_command
+  if [ -n "$season_ids" ]; then
+    season_env_command="export NBA_SEASON_IDS_TO_STORE='$season_ids'"
+  else
+    season_env_command="unset NBA_SEASON_IDS_TO_STORE"
+  fi
+
+  /usr/bin/nohup /usr/bin/bash -lc "
+    set -euo pipefail
+    cd '$NETRIC_BACKEND_DIR'
+    ${season_env_command}
+    '$python_bin' seed_active_players.py
+    while true; do
+      out=\"\$('$python_bin' fetch_worker.py)\"
+      /usr/bin/printf '%s\\n' \"\$out\"
+      if /usr/bin/printf '%s\\n' \"\$out\" | /usr/bin/grep -q 'Processed 0 players this run.'; then
+        break
+      fi
+      /usr/bin/sleep '$sleep_seconds'
+    done
+  " >> "$log_file" 2>&1 &
+
+  local pid=$!
+  /usr/bin/printf '%s\n' "$pid" > "$PID_FILE"
+
+  announce "Netric Seed+Fetch" "Started (pid ${pid}) log: ${log_file}"
+}
+
+status_job() {
+  if is_running; then
+    local pid
+    pid="$(/usr/bin/cat "$PID_FILE")"
+    announce "Netric Seed+Fetch" "Running (pid ${pid})"
+    exit 0
+  fi
+
+  announce "Netric Seed+Fetch" "Not running"
+  exit 1
+}
+
+stop_job() {
+  if ! is_running; then
+    announce "Netric Seed+Fetch" "Not running"
+    /usr/bin/rm -f "$PID_FILE"
+    exit 0
+  fi
+
+  local pid
+  pid="$(/usr/bin/cat "$PID_FILE")"
+  /usr/bin/kill "$pid"
+  /usr/bin/rm -f "$PID_FILE"
+  announce "Netric Seed+Fetch" "Stopped (pid ${pid})"
+}
+
+main() {
+  local command="start"
+
+  if [ "$#" -gt 0 ]; then
+    case "$1" in
+      start|status|stop)
+        command="$1"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+    esac
+  fi
+
+  case "$command" in
+    start)
+      start_job "$@"
+      ;;
+    status)
+      status_job
+      ;;
+    stop)
+      stop_job
+      ;;
+  esac
+}
+
+main "$@"

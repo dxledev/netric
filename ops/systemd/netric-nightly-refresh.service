@@ -12,6 +12,7 @@ Environment=MONGO_INIT_RETRIES=12
 Environment=MONGO_INIT_RETRY_DELAY_SECONDS=10
 Environment=MONGO_SERVER_SELECTION_TIMEOUT_MS=15000
 Environment=FETCH_WORKER_RETRY_DELAY_SECONDS=900
+Environment=NBA_MAX_SEASONS_TO_STORE=1
 ExecStart=/usr/bin/flock -n /tmp/netric-nightly-refresh.lock /home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/bin/python /home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/nightly_refresh.py
 Restart=on-failure
 RestartSec=5m

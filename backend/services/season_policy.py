@@ -1,7 +1,7 @@
 import os
 
 
-DEFAULT_MAX_SEASONS_TO_STORE = 2
+DEFAULT_MAX_SEASONS_TO_STORE = 0
 
 
 def get_max_seasons_to_store():
@@ -12,7 +12,7 @@ def get_max_seasons_to_store():
     except (TypeError, ValueError):
         return DEFAULT_MAX_SEASONS_TO_STORE
 
-    return parsed if parsed > 0 else DEFAULT_MAX_SEASONS_TO_STORE
+    return parsed if parsed >= 0 else DEFAULT_MAX_SEASONS_TO_STORE
 
 
 def get_explicit_seasons_to_store():
@@ -44,4 +44,8 @@ def select_season_ids_for_storage(season_ids):
         if selected:
             return selected
 
-    return normalized[:get_max_seasons_to_store()]
+    max_seasons = get_max_seasons_to_store()
+    if max_seasons == 0:
+        return normalized
+
+    return normalized[:max_seasons]

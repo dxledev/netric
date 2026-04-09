@@ -18011,3 +18011,38 @@ INFO:     127.0.0.1:44856 - "GET /search/players/brandon HTTP/1.1" 404 Not Found
 INFO:     127.0.0.1:32818 - "GET /search/players/lasalle%20thompson HTTP/1.1" 404 Not Found
 INFO:     127.0.0.1:41550 - "GET /search/players/brandin HTTP/1.1" 404 Not Found
 INFO:     127.0.0.1:32818 - "GET /search/players/brandin HTTP/1.1" 404 Not Found
+Traceback (most recent call last):
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/fetch_worker.py", line 4, in <module>
+    from database import fetch_queue_collection, player_cache_collection
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/database.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+MongoDB (primary) connected on attempt 1.
+MongoDB (stats) connection attempt 1/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d71600076d7487d7c6f2a2, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 2/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d71619076d7487d7c6f2a3, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 3/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d71632076d7487d7c6f2a4, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 4/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d7164b076d7487d7c6f2a5, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 5/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d71664076d7487d7c6f2a6, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 6/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d7167d076d7487d7c6f2a7, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 7/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d71696076d7487d7c6f2a8, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 8/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d716af076d7487d7c6f2a9, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 9/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d716c8076d7487d7c6f2aa, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 10/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d716e1076d7487d7c6f2ab, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 11/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d716fa076d7487d7c6f2ac, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connected on attempt 12.
+Worker started.
+Processed 0 players this run.
+INFO:     Will watch for changes in these directories: ['/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [76702] using StatReload
+INFO:     Started server process [76705]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'services/season_policy.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76705]
+INFO:     Started server process [231237]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
