@@ -37,6 +37,18 @@ export default function PlayerSummaryCard({
   const displaySeasonStats = summary?.season_stats_by_season?.[summary?.season] || summary?.season_stats
 
   useEffect(() => {
+    const cachedSummary = readPlayerSummaryCache(player.id)
+
+    if (cachedSummary) {
+      setSummary(cachedSummary)
+      setLoading(false)
+      setNotCached(false)
+      if (onSummaryLoaded) {
+        onSummaryLoaded(player.id, cachedSummary)
+      }
+      return undefined
+    }
+
     let intervalId
     let ignore = false
 
@@ -90,7 +102,7 @@ export default function PlayerSummaryCard({
         clearInterval(intervalId)
       }
     }
-  }, [player.id])
+  }, [onSummaryLoaded, player.id])
 
   useEffect(() => {
     if (summary && onSummaryLoaded) {

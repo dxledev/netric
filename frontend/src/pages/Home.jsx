@@ -221,6 +221,32 @@ function readFavoritesCache(token) {
   }
 }
 
+function isFavoritesCacheFresh(token) {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const cacheKey = getFavoritesCacheKey(token)
+
+  if (!cacheKey) {
+    return false
+  }
+
+  try {
+    const rawCache = window.localStorage.getItem(cacheKey)
+
+    if (!rawCache) {
+      return false
+    }
+
+    const parsedCache = JSON.parse(rawCache)
+    return Boolean(parsedCache?.timestamp) && Date.now() - parsedCache.timestamp <= FAVORITES_CACHE_TTL
+  } catch (error) {
+    console.error("Failed to inspect favorites cache freshness", error)
+    return false
+  }
+}
+
 function writeFavoritesCache(token, favorites) {
   if (typeof window === "undefined") {
     return
@@ -296,6 +322,13 @@ export default function Home() {
   useEffect(() => {
     if (!token) {
       navigate("/login")
+      return
+    }
+
+    if (isFavoritesCacheFresh(token)) {
+      setLoading(false)
+      setRefreshing(false)
+      setError(null)
       return
     }
 
