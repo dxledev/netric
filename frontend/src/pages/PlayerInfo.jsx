@@ -11,6 +11,128 @@ export default function PlayerInfo() {
   const navigate = useNavigate()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null
+
+  function getFavoritesCacheKey() {
+    return token ? `netric:favorites:${token}` : null
+  }
+
+  function normalizePlayerId(playerId) {
+    const numericId = Number(playerId)
+    return Number.isNaN(numericId) ? playerId : numericId
+  }
+
+  function isPlayerFavorited(playerId) {
+    if (typeof window === "undefined") {
+      return false
+    }
+
+    const cacheKey = getFavoritesCacheKey()
+
+    if (!cacheKey) {
+      return false
+    }
+
+    try {
+      const rawCache = window.localStorage.getItem(cacheKey)
+
+      if (!rawCache) {
+        return false
+      }
+
+      const parsedCache = JSON.parse(rawCache)
+      const players = Array.isArray(parsedCache?.data?.players) ? parsedCache.data.players : []
+      const normalizedPlayerId = String(playerId)
+
+      return players.some(player => String(player.id) === normalizedPlayerId)
+    } catch (error) {
+      console.error("Failed to read favorites cache", error)
+      return false
+    }
+  }
+
+  function addFavoriteToCache(player) {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const cacheKey = getFavoritesCacheKey()
+
+    if (!cacheKey) {
+      return
+    }
+
+    try {
+      const rawCache = window.localStorage.getItem(cacheKey)
+
+      if (!rawCache) {
+        return
+      }
+
+      const parsedCache = JSON.parse(rawCache)
+      const data = parsedCache?.data ?? { players: [], teams: [], stats: [] }
+      const existingPlayers = Array.isArray(data.players) ? data.players : []
+
+      if (existingPlayers.some(existingPlayer => String(existingPlayer.id) === String(player.id))) {
+        return
+      }
+
+      window.localStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          timestamp: Date.now(),
+          data: {
+            players: [...existingPlayers, player],
+            teams: Array.isArray(data.teams) ? data.teams : [],
+            stats: Array.isArray(data.stats) ? data.stats : [],
+          },
+        })
+      )
+    } catch (error) {
+      console.error("Failed to update favorites cache", error)
+    }
+  }
+
+  function removeFavoriteFromCache(playerId) {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const cacheKey = getFavoritesCacheKey()
+
+    if (!cacheKey) {
+      return
+    }
+
+    try {
+      const rawCache = window.localStorage.getItem(cacheKey)
+
+      if (!rawCache) {
+        return
+      }
+
+      const parsedCache = JSON.parse(rawCache)
+      const data = parsedCache?.data ?? { players: [], teams: [], stats: [] }
+      const existingPlayers = Array.isArray(data.players) ? data.players : []
+      const normalizedPlayerId = String(playerId)
+
+      window.localStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          timestamp: Date.now(),
+          data: {
+            players: existingPlayers.filter(player => String(player.id) !== normalizedPlayerId),
+            teams: Array.isArray(data.teams) ? data.teams : [],
+            stats: Array.isArray(data.stats) ? data.stats : [],
+          },
+        })
+      )
+    } catch (error) {
+      console.error("Failed to update favorites cache", error)
+    }
+  }
+
+  const normalizedPlayerId = normalizePlayerId(id)
   const cachedSummary = readPlayerSummaryCache(id)
   const initialTab = searchParams.get("tab")
   const [tab, setTab] = useState(initialTab === "games" ? "games" : "season")
@@ -19,6 +141,7 @@ export default function PlayerInfo() {
   const [splitMode, setSplitMode] = useState("default")
   const [data, setData] = useState(cachedSummary)
   const [loading, setLoading] = useState(() => !cachedSummary)
+  const [isFavorited, setIsFavorited] = useState(() => isPlayerFavorited(normalizedPlayerId))
   const gameLogScrollRef = useRef(null)
 
   useEffect(() => {
@@ -64,6 +187,10 @@ export default function PlayerInfo() {
       setTab("career")
     }
   }, [searchParams])
+
+  useEffect(() => {
+    setIsFavorited(isPlayerFavorited(normalizedPlayerId))
+  }, [normalizedPlayerId])
 
   useEffect(() => {
     const availableSeasons = Array.isArray(data?.available_game_log_seasons) ? data.available_game_log_seasons : []
@@ -470,8 +597,8 @@ export default function PlayerInfo() {
 
   const seasonSections = [
     {
-      title: "Scoring Output",
-      description: "Per-game production across the core box score categories.",
+      title: "Per-Game Production",
+      description: "A quick snapshot of nightly output across key box score stats.",
       stats: [
         { label: "PTS", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.pts) },
         { label: "AST", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.ast) },
@@ -518,6 +645,34 @@ export default function PlayerInfo() {
 
   function openStatHighs(statKey) {
     navigate(`/player/${id}/game-highs/${encodeURIComponent(statKey)}`)
+  }
+
+  async function handleFavoriteToggle() {
+    try {
+      if (isFavorited) {
+        await axios.delete(`${API_BASE}/favorites/player/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        removeFavoriteFromCache(normalizedPlayerId)
+        setIsFavorited(false)
+        return
+      }
+
+      await axios.post(
+        `${API_BASE}/favorite/players`,
+        { id: normalizedPlayerId, name: data?.name },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+
+      addFavoriteToCache({ id: normalizedPlayerId, name: data?.name })
+      setIsFavorited(true)
+    } catch (error) {
+      console.error(error)
+      window.alert(isFavorited ? "Error removing favorite" : "Error favoriting player")
+    }
   }
 
   function findGameLogIndex(targetGame) {
@@ -570,8 +725,30 @@ export default function PlayerInfo() {
                   </div>
 
                   <div>
-                    <div className="mb-3 inline-flex items-center rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.25em] text-blue-200">
-                      Player Overview
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="inline-flex items-center rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.25em] text-blue-200">
+                        Player Overview
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleFavoriteToggle}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/50 bg-amber-400/10 text-amber-300 transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-400/20"
+                        aria-label={isFavorited ? "Unfavorite player" : "Favorite player"}
+                        title={isFavorited ? "Unfavorite player" : "Favorite player"}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          className={`h-5 w-5 ${isFavorited ? "fill-amber-300 stroke-amber-300" : "fill-transparent stroke-amber-300"}`}
+                          strokeWidth="1.9"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="m12 2.5 2.98 6.03 6.65.97-4.82 4.7 1.14 6.63L12 17.7 6.05 20.83l1.14-6.63-4.82-4.7 6.65-.97L12 2.5z"
+                          />
+                        </svg>
+                      </button>
                     </div>
                     <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                       {data.name}

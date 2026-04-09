@@ -116,6 +116,10 @@ export default function StatHighs() {
 
   const resolvedStatKey = STAT_LABELS[statKey] ? statKey : "pts"
   const statLabel = STAT_LABELS[resolvedStatKey] || "PTS"
+  const headerTitle =
+    resolvedStatKey === "pts"
+      ? `${data?.name || "Player"} Top 50 Highest Scoring Games`
+      : `${data?.name || "Player"} Top 50 ${statLabel} Games`
   const seasonGameLogs = data?.season_game_logs || {}
   const sortedEntries = useMemo(() => {
     const entries = buildStatEntries(seasonGameLogs, resolvedStatKey)
@@ -175,11 +179,8 @@ export default function StatHighs() {
         <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl animate-fade-up sm:p-8 lg:p-10">
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Stat Highs</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Top 50 {statLabel} Games
+            {headerTitle}
           </h1>
-          <p className="mt-2 text-sm text-slate-300">
-            {data.name} career game logs, sorted in descending numerical order.
-          </p>
 
           {topEntries.length > 0 ? (
             <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/45">
