@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
 import { API_BASE } from "../api"
-import { readPlayerSummaryCache, writePlayerSummaryCache } from "../utils/playerSummaryCache"
+import { readPlayerSummaryCache } from "../utils/playerSummaryCache"
 import { normalizeSearchFilter } from "../utils/searchText"
 
 const EMPTY_FAVORITES = {
@@ -411,46 +411,6 @@ export default function Home() {
       return nextSummaries
     })
   }, [favorites.players])
-
-  useEffect(() => {
-    let ignore = false
-
-    async function hydrateMissingPlayerSummaries() {
-      const missingPlayers = favorites.players.filter(player => !playerSummaries[player.id])
-
-      if (!missingPlayers.length) {
-        return
-      }
-
-      await Promise.all(
-        missingPlayers.map(async player => {
-          try {
-            const res = await axios.get(`${API_BASE}/player/${player.id}/summary`)
-
-            if (ignore) {
-              return
-            }
-
-            writePlayerSummaryCache(player.id, res.data)
-            setPlayerSummaries(currentSummaries => ({
-              ...currentSummaries,
-              [player.id]: res.data,
-            }))
-          } catch (err) {
-            if (!ignore && err?.response?.status !== 404) {
-              console.error(err)
-            }
-          }
-        })
-      )
-    }
-
-    hydrateMissingPlayerSummaries()
-
-    return () => {
-      ignore = true
-    }
-  }, [favorites.players, playerSummaries])
 
   function handlePlayerRemoved(playerId) {
     setFavorites(currentFavorites => {
