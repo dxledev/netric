@@ -15,6 +15,7 @@ export default function PlayerInfo() {
   const initialTab = searchParams.get("tab")
   const [tab, setTab] = useState(initialTab === "games" ? "games" : "season")
   const [selectedGameLogSeason, setSelectedGameLogSeason] = useState("")
+  const [selectedGameHighSeason, setSelectedGameHighSeason] = useState("all-time")
   const [splitMode, setSplitMode] = useState("default")
   const [data, setData] = useState(cachedSummary)
   const [loading, setLoading] = useState(() => !cachedSummary)
@@ -56,6 +57,11 @@ export default function PlayerInfo() {
 
     if (nextTab === "games") {
       setTab("games")
+      return
+    }
+
+    if (nextTab === "career") {
+      setTab("career")
     }
   }, [searchParams])
 
@@ -158,6 +164,14 @@ export default function PlayerInfo() {
     return Number(value) > 0 ? `+${Number(value)}` : `${Number(value)}`
   }
 
+  function formatGameHighValue(statKey, value) {
+    if (statKey === "plus_minus") {
+      return formatSignedNumber(value)
+    }
+
+    return formatNumber(value, 0)
+  }
+
   function toNumericValue(value) {
     if (value == null || value === "") {
       return 0
@@ -174,6 +188,17 @@ export default function PlayerInfo() {
 
     const parsedDate = new Date(`${game.game_date}T00:00:00`)
     return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
+  }
+
+  function getGameDisplayDate(game) {
+    if (game?.game_date) {
+      const parsedDate = parseGameDate(game)
+      if (parsedDate) {
+        return formatLongDate(parsedDate)
+      }
+    }
+
+    return game?.date || "Date unavailable"
   }
 
   function formatLongDate(date) {
@@ -349,10 +374,38 @@ export default function PlayerInfo() {
     }
   }
 
+  function getGameHighByStat(gameEntries, statKey) {
+    if (!Array.isArray(gameEntries) || gameEntries.length === 0) {
+      return null
+    }
+
+    let currentHigh = null
+
+    gameEntries.forEach(entry => {
+      const statValue = toNumericValue(entry?.game?.[statKey])
+
+      if (!currentHigh || statValue > currentHigh.value) {
+        currentHigh = {
+          ...entry,
+          value: statValue,
+        }
+      }
+    })
+
+    return currentHigh
+  }
+
+  function getGameHighsByStat(gameEntries, categories) {
+    return categories.reduce((accumulator, category) => {
+      accumulator[category.key] = getGameHighByStat(gameEntries, category.key)
+      return accumulator
+    }, {})
+  }
+
   const tabs = [
     { id: "season", label: "Season" },
     { id: "games", label: "Game Logs" },
-    { id: "career", label: "Career" },
+    { id: "career", label: "Game Highs" },
     { id: "advanced", label: "Advanced" },
   ]
 
@@ -372,6 +425,41 @@ export default function PlayerInfo() {
   const gameLogAverages = getGameLogAverages(activeSeasonGameLog)
   const activeLastGame = activeSeasonGameLog[0] || data.last_game || null
   const activeLastFiveGames = activeSeasonGameLog.slice(0, 5)
+  const gameHighStatCategories = [
+    { key: "pts", label: "PTS" },
+    { key: "reb", label: "REB" },
+    { key: "ast", label: "AST" },
+    { key: "stl", label: "STL" },
+    { key: "blk", label: "BLK" },
+    { key: "fgm", label: "FGM" },
+    { key: "three_pm", label: "3PM" },
+    { key: "ftm", label: "FTM" },
+    { key: "tov", label: "TOV" },
+    { key: "min", label: "MIN" },
+    { key: "plus_minus", label: "+/-" },
+  ]
+  const gameHighSeasonOptions = Array.from(
+    new Set([
+      "all-time",
+      ...availableGameLogSeasons,
+      ...Object.keys(seasonGameLogs || {}),
+    ])
+  )
+  const activeGameHighSeason = gameHighSeasonOptions.includes(selectedGameHighSeason)
+    ? selectedGameHighSeason
+    : "all-time"
+  const allTimeGameEntries = Object.entries(seasonGameLogs || {}).flatMap(([seasonId, games]) =>
+    Array.isArray(games) ? games.map((game, index) => ({ seasonId: String(seasonId), game, index })) : []
+  )
+  const selectedGameHighEntries = activeGameHighSeason === "all-time"
+    ? allTimeGameEntries
+    : (seasonGameLogs[activeGameHighSeason] || []).map((game, index) => ({
+      seasonId: activeGameHighSeason,
+      game,
+      index,
+    }))
+  const careerGameHighsByStat = getGameHighsByStat(allTimeGameEntries, gameHighStatCategories)
+  const selectedGameHighsByStat = getGameHighsByStat(selectedGameHighEntries, gameHighStatCategories)
 
   const primaryStats = [
     { label: "PTS", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.pts), accent: "from-blue-500/30 to-cyan-400/10" },
@@ -418,9 +506,18 @@ export default function PlayerInfo() {
     },
   ]
 
-  function openGameSummary(game, index) {
+  function openGameSummaryForSeason(seasonId, game, index) {
+    const targetSeason = seasonId || activeGameLogSeason
     const gameKey = getGameLogKey(game, index)
-    navigate(`/player/${id}/games/${encodeURIComponent(gameKey)}?season=${encodeURIComponent(activeGameLogSeason)}`)
+    navigate(`/player/${id}/games/${encodeURIComponent(gameKey)}?season=${encodeURIComponent(targetSeason)}`)
+  }
+
+  function openGameSummary(game, index) {
+    openGameSummaryForSeason(activeGameLogSeason, game, index)
+  }
+
+  function openStatHighs(statKey) {
+    navigate(`/player/${id}/game-highs/${encodeURIComponent(statKey)}`)
   }
 
   function findGameLogIndex(targetGame) {
@@ -880,12 +977,119 @@ export default function PlayerInfo() {
                 )}
 
                 {tab === "career" && (
-                  <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-8 text-center shadow-lg shadow-black/20">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Career</p>
-                    <h2 className="mt-3 text-2xl font-semibold text-white">Career view coming next</h2>
-                    <p className="mt-3 text-sm text-slate-300">
-                      The layout is ready for career totals and multi-season trends once that data is wired in.
-                    </p>
+                  <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Game Highs</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-white">
+                          {activeGameHighSeason === "all-time" ? "All-Time Single-Game Highs" : `Season ${activeGameHighSeason} Game Highs`}
+                        </h2>
+                        <p className="mt-2 text-sm text-slate-300">
+                          Each category shows a single-game peak. Season highs are highlighted when they match the all-time career high.
+                        </p>
+                      </div>
+
+                      <label className="flex w-fit flex-col gap-2 text-sm text-slate-300">
+                        <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">Scope</span>
+                        <select
+                          value={activeGameHighSeason}
+                          onChange={event => setSelectedGameHighSeason(event.target.value)}
+                          className="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                        >
+                          {gameHighSeasonOptions.map(season => (
+                            <option key={season} value={season}>
+                              {season === "all-time" ? "All-Time" : season}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {selectedGameHighEntries.length > 0 ? (
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {gameHighStatCategories.map(category => {
+                          const currentHigh = selectedGameHighsByStat[category.key]
+                          const allTimeHigh = careerGameHighsByStat[category.key]
+                          const isCareerHighMatch = Boolean(
+                            currentHigh &&
+                            allTimeHigh &&
+                            currentHigh.value === allTimeHigh.value
+                          )
+
+                          if (!currentHigh) {
+                            return (
+                              <div
+                                key={category.key}
+                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left"
+                              >
+                                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{category.label}</p>
+                                <p className="mt-3 text-3xl font-semibold text-white">-</p>
+                                <p className="mt-3 text-xs text-slate-400">No game data available.</p>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div
+                              key={category.key}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openStatHighs(category.key)}
+                              onKeyDown={event => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault()
+                                  openStatHighs(category.key)
+                                }
+                              }}
+                              className={`rounded-2xl border px-4 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 cursor-pointer ${
+                                isCareerHighMatch
+                                  ? "border-blue-300/35 bg-gradient-to-br from-blue-500/20 to-cyan-400/10 shadow-lg shadow-blue-900/20"
+                                  : "border-white/10 bg-white/5 hover:border-white/20"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="text-xs uppercase tracking-[0.22em] text-slate-300">{category.label}</p>
+                                {isCareerHighMatch && (
+                                  <span className="rounded-full border border-blue-200/30 bg-blue-300/15 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-blue-100">
+                                    Career High
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-3 text-3xl font-semibold text-white">
+                                {formatGameHighValue(category.key, currentHigh.value)}
+                              </p>
+                              <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+                                {currentHigh.seasonId}
+                              </p>
+                              <div className="mt-1 flex items-end justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-100">
+                                    {currentHigh.game?.matchup || "Matchup unavailable"}
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-400">
+                                    {getGameDisplayDate(currentHigh.game)} • {currentHigh.game?.result || "Result unavailable"}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={event => {
+                                    event.stopPropagation()
+                                    openGameSummaryForSeason(currentHigh.seasonId, currentHigh.game, currentHigh.index)
+                                  }}
+                                  className="rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-300 hover:bg-white/15"
+                                >
+                                  View Game
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-5 rounded-[1.25rem] border border-dashed border-white/12 bg-slate-900/35 p-6 text-sm text-slate-400">
+                        Game log data is not available yet, so game highs cannot be calculated.
+                      </div>
+                    )}
                   </div>
                 )}
 

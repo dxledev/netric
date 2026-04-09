@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
@@ -45,12 +45,6 @@ const TEAM_ALIASES_BY_ABBREVIATION = {
   UTA: ["Utah Jazz", "Jazz", "Utah"],
   WAS: ["Washington Wizards", "Wizards", "Washington"],
 }
-const TEAM_FILTER_OPTIONS = Object.entries(TEAM_ALIASES_BY_ABBREVIATION)
-  .map(([abbreviation, aliases]) => ({
-    abbreviation,
-    name: aliases[0] || abbreviation,
-  }))
-  .sort((left, right) => left.name.localeCompare(right.name))
 const PLAYER_SORT_OPTIONS = [
   { value: "pts", label: "PTS" },
   { value: "ast", label: "AST" },
@@ -114,6 +108,13 @@ function normalizeFavorites(data = {}) {
     teams: Array.isArray(data.teams) ? data.teams : [],
     stats: Array.isArray(data.stats) ? data.stats : [],
   }
+}
+
+function getTeamDisplayName(abbreviation) {
+  const normalizedAbbreviation = String(abbreviation || "").toUpperCase()
+  const aliases = TEAM_ALIASES_BY_ABBREVIATION[normalizedAbbreviation]
+
+  return aliases?.[0] || normalizedAbbreviation
 }
 
 function getFavoritesCacheKey(token) {
@@ -542,6 +543,25 @@ export default function Home() {
     { id: "teams", label: "Favorite Teams", count: favorites.teams.length },
     { id: "stats", label: "Favorite Stats", count: favorites.stats.length },
   ]
+  const availableDashboardTeams = useMemo(() => {
+    const uniqueTeams = new Set()
+
+    favorites.players.forEach(player => {
+      const summary = playerSummaries[player.id]
+      const teamAbbreviation = String(summary?.team?.abbreviation || "").toUpperCase()
+
+      if (teamAbbreviation) {
+        uniqueTeams.add(teamAbbreviation)
+      }
+    })
+
+    return Array.from(uniqueTeams)
+      .map(abbreviation => ({
+        abbreviation,
+        name: getTeamDisplayName(abbreviation),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name))
+  }, [favorites.players, playerSummaries])
   const normalizedPlayerNameFilter = normalizeSearchFilter(playerNameFilter)
   const filteredPlayers = favorites.players.filter(player => {
     const summary = playerSummaries[player.id]
@@ -622,6 +642,18 @@ export default function Home() {
     }))
   }
 
+  useEffect(() => {
+    const currentTeamOptions = new Set(availableDashboardTeams.map(team => team.abbreviation))
+
+    if (teamFilter && !currentTeamOptions.has(teamFilter)) {
+      setTeamFilter("")
+    }
+
+    if (draftTeamFilter && !currentTeamOptions.has(draftTeamFilter)) {
+      setDraftTeamFilter("")
+    }
+  }, [availableDashboardTeams, teamFilter, draftTeamFilter])
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_24%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
@@ -641,7 +673,7 @@ export default function Home() {
                     Netric Favorites
                   </h1>
                   <p className="mt-2 text-sm text-slate-300 sm:text-base">
-                    <div>Check out your favorite players, teams, and stat categories all in one place!</div> 
+                    <div>Keep up-to-date with favorite players, teams, and stats all in one place!</div> 
                     <div>Move them around and fine-tune your layout.</div>
                   </p>
                 </div>
@@ -772,7 +804,7 @@ export default function Home() {
                                   className="team-filter-select block w-full appearance-none rounded-xl border-0 bg-slate-900 px-3 py-2 pr-10 text-sm text-white outline-none"
                                 >
                                   <option value="">All Teams</option>
-                                  {TEAM_FILTER_OPTIONS.map(team => (
+                                  {availableDashboardTeams.map(team => (
                                     <option key={team.abbreviation} value={team.abbreviation}>
                                       {team.name} ({team.abbreviation})
                                     </option>
