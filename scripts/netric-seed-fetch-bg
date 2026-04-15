@@ -2,7 +2,9 @@
 set -euo pipefail
 
 SCRIPT_NAME="netric-seed-fetch-bg"
-NETRIC_BACKEND_DIR="/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+NETRIC_BACKEND_DIR="${REPO_ROOT}/backend"
 DEFAULT_PYTHON_BIN="${NETRIC_BACKEND_DIR}/venv/bin/python"
 FALLBACK_PYTHON_BIN="/usr/bin/python3"
 DEFAULT_SEASON_IDS=""

@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,13 +19,36 @@ from database import fetch_queue_collection, player_cache_collection
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
+def normalize_origin(origin: str) -> str:
+    return origin.strip().rstrip("/")
+
+default_cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://ec2-52-9-241-242.us-west-1.compute.amazonaws.com",
+    "https://ec2-52-9-241-242.us-west-1.compute.amazonaws.com",
+    "http://52.9.241.242",
+    "https://52.9.241.242",
+]
+raw_cors_origins = os.getenv("CORS_ORIGINS", "")
+configured_origins = [normalize_origin(origin) for origin in raw_cors_origins.split(",") if origin.strip()]
+cors_origins = sorted(
+    {
+        normalize_origin(origin)
+        for origin in [*default_cors_origins, *configured_origins]
+        if origin.strip()
+    }
+)
+
 # Mongo collections
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

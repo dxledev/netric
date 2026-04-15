@@ -18,6 +18,22 @@ def utc_now():
     return datetime.now(UTC)
 
 
+def parse_game_date(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+
+    # nba_api can return month strings like "APR 10, 2026" while
+    # normalized cache formats may use ISO "2026-04-10".
+    for date_format in ("%b %d, %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, date_format).date()
+        except ValueError:
+            continue
+
+    return None
+
+
 def run_with_retries(fetch_fn):
     last_error = None
 
@@ -79,8 +95,16 @@ def get_latest_remote_game_date(player_id: int):
     if game_df.empty:
         return None
 
-    latest_date = game_df["GAME_DATE"].max()
-    return datetime.strptime(latest_date, "%b %d, %Y").date()
+    latest_date = None
+
+    for raw_date in game_df["GAME_DATE"].tolist():
+        parsed_date = parse_game_date(raw_date)
+        if parsed_date is None:
+            continue
+        if latest_date is None or parsed_date > latest_date:
+            latest_date = parsed_date
+
+    return latest_date
 
 
 def get_latest_cached_game_date(cached_player):
@@ -95,11 +119,12 @@ def get_latest_cached_game_date(cached_player):
     latest_date = None
 
     for game in game_log:
-        game_date = game.get("GAME_DATE")
-        if not game_date:
+        parsed_date = parse_game_date(game.get("GAME_DATE"))
+        if parsed_date is None:
+            parsed_date = parse_game_date(game.get("game_date"))
+        if parsed_date is None:
             continue
 
-        parsed_date = datetime.strptime(game_date, "%b %d, %Y").date()
         if latest_date is None or parsed_date > latest_date:
             latest_date = parsed_date
 

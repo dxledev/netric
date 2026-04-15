@@ -27,8 +27,19 @@ require_systemctl() {
 }
 
 install_units() {
+  local backend_dir python_bin
+
+  backend_dir="$REPO_ROOT/backend"
+  python_bin="$backend_dir/venv/bin/python"
+  if [[ ! -x "$python_bin" ]]; then
+    python_bin="/usr/bin/python3"
+  fi
+
   mkdir -p "$USER_UNIT_DIR"
-  ln -sf "$UNIT_SRC_DIR/$SERVICE" "$USER_UNIT_DIR/$SERVICE"
+  sed \
+    -e "s|__NETRIC_BACKEND_DIR__|$backend_dir|g" \
+    -e "s|__NETRIC_PYTHON_BIN__|$python_bin|g" \
+    "$UNIT_SRC_DIR/$SERVICE" > "$USER_UNIT_DIR/$SERVICE"
   ln -sf "$UNIT_SRC_DIR/$TIMER" "$USER_UNIT_DIR/$TIMER"
 }
 

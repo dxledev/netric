@@ -1,0 +1,86 @@
+MongoDB (primary) connected on attempt 1.
+MongoDB (stats) connection attempt 1/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d729dc538d173fcf6c41ae, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 2/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d729f5538d173fcf6c41af, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 3/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72a0e538d173fcf6c41b0, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 4/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72a27538d173fcf6c41b1, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 5/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72a40538d173fcf6c41b2, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 6/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72a59538d173fcf6c41b3, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 7/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72a72538d173fcf6c41b4, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 8/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72a8b538d173fcf6c41b5, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 9/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72aa4538d173fcf6c41b6, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 10/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72abd538d173fcf6c41b7, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 11/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72ad6538d173fcf6c41b8, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 12/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72aef538d173fcf6c41b9, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+Traceback (most recent call last):
+  File "/home/rose/.dev/netric/backend/seed_active_players.py", line 2, in <module>
+    from database import fetch_queue_collection, player_cache_collection
+  File "/home/rose/.dev/netric/backend/database.py", line 56, in <module>
+    stats_client = _connect_with_retry(stats_uri, "stats")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/database.py", line 48, in _connect_with_retry
+    raise last_error
+  File "/home/rose/.dev/netric/backend/database.py", line 36, in _connect_with_retry
+    client.admin.command("ping")
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/database.py", line 751, in command
+    with self.__client._socket_for_reads(
+  File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/mongo_client.py", line 1387, in _socket_for_reads
+    server = self._select_server(read_preference, session)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/mongo_client.py", line 1346, in _select_server
+    server = topology.select_server(server_selector)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/topology.py", line 244, in select_server
+    return random.choice(self.select_servers(selector,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/topology.py", line 202, in select_servers
+    server_descriptions = self._select_servers_loop(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/topology.py", line 218, in _select_servers_loop
+    raise ServerSelectionTimeoutError(
+pymongo.errors.ServerSelectionTimeoutError: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72aef538d173fcf6c41b9, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (primary) connected on attempt 1.
+MongoDB (stats) connection attempt 1/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72b2253ca625e4cdbd136, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 2/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72b3b53ca625e4cdbd137, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 3/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72b5453ca625e4cdbd138, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 4/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72b6d53ca625e4cdbd139, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 5/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72b8653ca625e4cdbd13a, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 6/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72b9f53ca625e4cdbd13b, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 7/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72bb853ca625e4cdbd13c, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 8/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72bd153ca625e4cdbd13d, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 9/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72bea53ca625e4cdbd13e, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 10/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72c0353ca625e4cdbd13f, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 11/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72c1c53ca625e4cdbd140, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+MongoDB (stats) connection attempt 12/12 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72c3653ca625e4cdbd141, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+Traceback (most recent call last):
+  File "/home/rose/.dev/netric/backend/seed_active_players.py", line 2, in <module>
+    from database import fetch_queue_collection, player_cache_collection
+  File "/home/rose/.dev/netric/backend/database.py", line 56, in <module>
+    stats_client = _connect_with_retry(stats_uri, "stats")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/database.py", line 48, in _connect_with_retry
+    raise last_error
+  File "/home/rose/.dev/netric/backend/database.py", line 36, in _connect_with_retry
+    client.admin.command("ping")
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/database.py", line 751, in command
+    with self.__client._socket_for_reads(
+  File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/mongo_client.py", line 1387, in _socket_for_reads
+    server = self._select_server(read_preference, session)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/mongo_client.py", line 1346, in _select_server
+    server = topology.select_server(server_selector)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/topology.py", line 244, in select_server
+    return random.choice(self.select_servers(selector,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/topology.py", line 202, in select_servers
+    server_descriptions = self._select_servers_loop(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rose/.dev/netric/backend/venv/lib/python3.12/site-packages/pymongo/topology.py", line 218, in _select_servers_loop
+    raise ServerSelectionTimeoutError(
+pymongo.errors.ServerSelectionTimeoutError: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 15.0s, Topology Description: <TopologyDescription id: 69d72c3653ca625e4cdbd141, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>

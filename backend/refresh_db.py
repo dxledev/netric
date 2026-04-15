@@ -36,6 +36,25 @@ def find_cached_player(player_id):
     )
 
 
+def cached_player_has_games(cached_player):
+    if not cached_player:
+        return False
+
+    data = cached_player.get("data", {})
+
+    if data.get("game_log"):
+        return True
+
+    for season in data.get("career_stats", []):
+        try:
+            if float(season.get("GP") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+
+    return False
+
+
 def should_refresh_player(player_id):
     cached_player = find_cached_player(player_id)
 
@@ -49,6 +68,10 @@ def should_refresh_player(player_id):
 
     remote_latest_game = get_latest_remote_game_date(player_id)
     if remote_latest_game is None:
+        if cached_player_has_games(cached_player):
+            raise ValueError(
+                "Remote latest game date unavailable for player with cached games"
+            )
         return False
 
     return remote_latest_game > cached_latest_game
