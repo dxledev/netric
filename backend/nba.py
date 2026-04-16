@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 4
+SUMMARY_VERSION = 5
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 
@@ -196,6 +196,25 @@ def build_season_game_logs(career_stats: pd.DataFrame, data: dict):
     return {latest_season_id: normalize_game_log(pd.DataFrame(raw_game_log))}
 
 
+def build_playoff_season_game_logs(playoff_career_stats: pd.DataFrame, data: dict):
+    raw_logs_by_season = data.get("playoff_season_game_logs")
+
+    if isinstance(raw_logs_by_season, dict) and raw_logs_by_season:
+        normalized_logs = {}
+
+        for season_id in sort_season_ids(raw_logs_by_season.keys()):
+            normalized_logs[str(season_id)] = normalize_game_log(pd.DataFrame(raw_logs_by_season[season_id]))
+
+        return normalized_logs
+
+    if playoff_career_stats.empty:
+        return {}
+
+    latest_season_id = str(playoff_career_stats.iloc[0]["SEASON_ID"])
+    raw_game_log = data.get("playoff_season_game_log") or data.get("playoff_game_log") or []
+    return {latest_season_id: normalize_game_log(pd.DataFrame(raw_game_log))}
+
+
 def build_player_summary_from_data(player_id: int, data: dict):
     if "career_stats" not in data:
         raise HTTPException(status_code=404, detail="Invalid cache format")
@@ -221,8 +240,36 @@ def build_player_summary_from_data(player_id: int, data: dict):
 
     season_stats_by_season = build_season_stats_by_season(career_stats)
     season_stats = season_stats_by_season.get(latest_season_id, build_season_stats(latest))
+    playoff_career_stats = pd.DataFrame(data.get("playoff_career_stats", []))
+    if not playoff_career_stats.empty and "GP" in playoff_career_stats:
+        playoff_career_stats = playoff_career_stats[playoff_career_stats["GP"] > 0]
+    if not playoff_career_stats.empty and "SEASON_ID" in playoff_career_stats:
+        playoff_career_stats = playoff_career_stats.sort_values("SEASON_ID", ascending=False)
+
+    playoff_season_stats_by_season = (
+        build_season_stats_by_season(playoff_career_stats)
+        if not playoff_career_stats.empty
+        else {}
+    )
+    playoff_latest_season_id = (
+        str(playoff_career_stats.iloc[0]["SEASON_ID"])
+        if not playoff_career_stats.empty
+        else None
+    )
+    playoff_season_stats = (
+        playoff_season_stats_by_season.get(playoff_latest_season_id)
+        if playoff_latest_season_id
+        else None
+    )
+    playoff_season_game_logs = build_playoff_season_game_logs(playoff_career_stats, data)
+    normalized_playoff_games = (
+        playoff_season_game_logs.get(playoff_latest_season_id, [])
+        if playoff_latest_season_id
+        else []
+    )
 
     last_game = normalized_games[0] if normalized_games else None
+    playoff_last_game = normalized_playoff_games[0] if normalized_playoff_games else None
 
     return {
         "player_id": int(player_id),
@@ -242,6 +289,15 @@ def build_player_summary_from_data(player_id: int, data: dict):
         "season_game_log": normalized_games,
         "season_game_logs": season_game_logs,
         "available_game_log_seasons": sort_season_ids(season_game_logs.keys()),
+        "playoff_season": playoff_latest_season_id,
+        "playoff_season_stats": playoff_season_stats,
+        "playoff_season_stats_by_season": playoff_season_stats_by_season,
+        "available_playoff_stat_seasons": sort_season_ids(playoff_season_stats_by_season.keys()),
+        "playoff_last_game": playoff_last_game,
+        "playoff_last_5_games": normalized_playoff_games[:5],
+        "playoff_season_game_log": normalized_playoff_games,
+        "playoff_season_game_logs": playoff_season_game_logs,
+        "available_playoff_game_log_seasons": sort_season_ids(playoff_season_game_logs.keys()),
         "headshot_url": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png",
     }
 

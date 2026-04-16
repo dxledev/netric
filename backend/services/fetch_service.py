@@ -59,7 +59,11 @@ def get_active_season_ids(career_df):
     return sorted(set(active_seasons), reverse=True)
 
 
-def fetch_game_logs_by_season(player_id: int, season_ids: list[str]):
+def fetch_game_logs_by_season(
+    player_id: int,
+    season_ids: list[str],
+    season_type_all_star: str = "Regular Season",
+):
     season_logs = {}
 
     for season_id in season_ids:
@@ -67,6 +71,7 @@ def fetch_game_logs_by_season(player_id: int, season_ids: list[str]):
             lambda: playergamelog.PlayerGameLog(
                 player_id=player_id,
                 season=season_id,
+                season_type_all_star=season_type_all_star,
                 timeout=NBA_API_TIMEOUT_SECONDS,
             )
         )
@@ -143,19 +148,36 @@ def fetch_player_by_name(name: str):
             timeout=NBA_API_TIMEOUT_SECONDS,
         )
     )
-    df = career.get_data_frames()[0]
-    season_ids = get_active_season_ids(df)
+    regular_df = career.season_totals_regular_season.get_data_frame()
+    playoff_df = career.season_totals_post_season.get_data_frame()
+
+    season_ids = get_active_season_ids(regular_df)
     season_ids_to_store = select_season_ids_for_storage(season_ids)
     season_logs = fetch_game_logs_by_season(player_id, season_ids_to_store)
     latest_season = season_ids_to_store[0] if season_ids_to_store else None
 
+    playoff_season_ids = get_active_season_ids(playoff_df)
+    playoff_season_ids_to_store = select_season_ids_for_storage(playoff_season_ids)
+    playoff_season_logs = fetch_game_logs_by_season(
+        player_id,
+        playoff_season_ids_to_store,
+        season_type_all_star="Playoffs",
+    )
+    latest_playoff_season = (
+        playoff_season_ids_to_store[0] if playoff_season_ids_to_store else None
+    )
+
     summary_data = {
         "player_id": player_id,
         "name": results[0]["full_name"],
-        "career_stats": df.to_dict(orient="records"),
+        "career_stats": regular_df.to_dict(orient="records"),
+        "playoff_career_stats": playoff_df.to_dict(orient="records"),
         "game_log": season_logs.get(latest_season, []),
         "season_game_log": season_logs.get(latest_season, []),
         "season_game_logs": season_logs,
+        "playoff_game_log": playoff_season_logs.get(latest_playoff_season, []),
+        "playoff_season_game_log": playoff_season_logs.get(latest_playoff_season, []),
+        "playoff_season_game_logs": playoff_season_logs,
     }
 
     player_cache.update_one(
@@ -181,17 +203,34 @@ def fetch_player_data(player_id: int):
             timeout=NBA_API_TIMEOUT_SECONDS,
         )
     )
-    career_df = career.get_data_frames()[0]
+    career_df = career.season_totals_regular_season.get_data_frame()
+    playoff_career_df = career.season_totals_post_season.get_data_frame()
+
     season_ids = get_active_season_ids(career_df)
     season_ids_to_store = select_season_ids_for_storage(season_ids)
     season_logs = fetch_game_logs_by_season(player_id, season_ids_to_store)
     latest_season = season_ids_to_store[0] if season_ids_to_store else None
 
+    playoff_season_ids = get_active_season_ids(playoff_career_df)
+    playoff_season_ids_to_store = select_season_ids_for_storage(playoff_season_ids)
+    playoff_season_logs = fetch_game_logs_by_season(
+        player_id,
+        playoff_season_ids_to_store,
+        season_type_all_star="Playoffs",
+    )
+    latest_playoff_season = (
+        playoff_season_ids_to_store[0] if playoff_season_ids_to_store else None
+    )
+
     return {
         "player_id": player_id,
         "name": name,
         "career_stats": career_df.to_dict("records"),
+        "playoff_career_stats": playoff_career_df.to_dict("records"),
         "game_log": season_logs.get(latest_season, []),
         "season_game_log": season_logs.get(latest_season, []),
         "season_game_logs": season_logs,
+        "playoff_game_log": playoff_season_logs.get(latest_playoff_season, []),
+        "playoff_season_game_log": playoff_season_logs.get(latest_playoff_season, []),
+        "playoff_season_game_logs": playoff_season_logs,
     }

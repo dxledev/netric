@@ -32,6 +32,9 @@ def find_cached_player(player_id):
             "data.game_log": 1,
             "data.season_game_logs": 1,
             "data.career_stats": 1,
+            "data.playoff_game_log": 1,
+            "data.playoff_season_game_logs": 1,
+            "data.playoff_career_stats": 1,
         },
     )
 
