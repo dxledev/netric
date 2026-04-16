@@ -199,10 +199,11 @@ export default function PlayerInfo() {
   }, [normalizedPlayerId])
 
   useEffect(() => {
-    const availableSeasons = isPostSeason
-      ? (Array.isArray(data?.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : [])
-      : (Array.isArray(data?.available_game_log_seasons) ? data.available_game_log_seasons : [])
-    const fallbackSeason = isPostSeason ? data?.playoff_season || "" : data?.season || ""
+    const playoffSeasons = Array.isArray(data?.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : []
+    const playInSeasons = Array.isArray(data?.available_playin_game_log_seasons) ? data.available_playin_game_log_seasons : []
+    const regularSeasons = Array.isArray(data?.available_game_log_seasons) ? data.available_game_log_seasons : []
+    const availableSeasons = isPostSeason ? Array.from(new Set([...playoffSeasons, ...playInSeasons])) : regularSeasons
+    const fallbackSeason = isPostSeason ? data?.playoff_season || data?.playin_season || "" : data?.season || ""
     const requestedSeason = searchParams.get("season")
     const nextSeason = availableSeasons.includes(requestedSeason)
       ? requestedSeason
@@ -445,6 +446,109 @@ export default function PlayerInfo() {
     return groupedRows
   }
 
+  function getPlayoffOpponentKey(game) {
+    const matchup = String(game?.matchup || "")
+    const opponentMatch = matchup.match(/\b(?:vs\.|@)\s*([A-Z]{2,3})\b/i)
+    return opponentMatch ? opponentMatch[1].toUpperCase() : ""
+  }
+
+  function getPlayoffRoundLabel(roundIndex) {
+    if (roundIndex === 0) {
+      return "Round 1"
+    }
+
+    if (roundIndex === 1) {
+      return "Round 2"
+    }
+
+    if (roundIndex === 2) {
+      return "Conference Finals"
+    }
+
+    if (roundIndex === 3) {
+      return "NBA Finals"
+    }
+
+    return `Round ${roundIndex + 1}`
+  }
+
+  function getPostSeasonGameLogRows(playInGames, playoffGames) {
+    const rows = []
+
+    if (Array.isArray(playInGames) && playInGames.length > 0) {
+      rows.push({
+        type: "group",
+        key: "playin-group",
+        label: "PlayIn",
+        count: playInGames.length,
+      })
+
+      playInGames.forEach((game, index) => {
+        rows.push({
+          type: "game",
+          key: `playin-${getGameLogKey(game, index)}-row`,
+          game,
+          index,
+        })
+      })
+    }
+
+    if (!Array.isArray(playoffGames) || playoffGames.length === 0) {
+      return rows
+    }
+
+    const gamesInChronologicalOrder = [...playoffGames].reverse()
+    const opponentOrder = []
+
+    gamesInChronologicalOrder.forEach(game => {
+      const opponentKey = getPlayoffOpponentKey(game)
+
+      if (!opponentKey || opponentOrder.includes(opponentKey)) {
+        return
+      }
+
+      opponentOrder.push(opponentKey)
+    })
+
+    const roundBuckets = opponentOrder.length > 0 ? opponentOrder.map(() => []) : [[]]
+
+    playoffGames.forEach((game, index) => {
+      const opponentKey = getPlayoffOpponentKey(game)
+      const roundIndex = opponentOrder.length > 0 ? opponentOrder.indexOf(opponentKey) : 0
+      const safeRoundIndex = roundIndex >= 0 ? roundIndex : 0
+
+      if (!roundBuckets[safeRoundIndex]) {
+        roundBuckets[safeRoundIndex] = []
+      }
+
+      roundBuckets[safeRoundIndex].push({ game, index })
+    })
+
+    roundBuckets.forEach((entries, roundIndex) => {
+      if (!entries || entries.length === 0) {
+        return
+      }
+
+      rows.push({
+        type: "group",
+        key: `playoff-round-${roundIndex}-group`,
+        label: getPlayoffRoundLabel(roundIndex),
+        count: entries.length,
+      })
+
+      entries.forEach(({ game, index }) => {
+        rows.push({
+          type: "game",
+          key: `playoff-round-${roundIndex}-${getGameLogKey(game, index)}-row`,
+          game,
+          index,
+        })
+      })
+    })
+
+    return rows
+  }
+
   function getGameLogAverages(games) {
     if (!Array.isArray(games) || games.length === 0) {
       return null
@@ -545,16 +649,22 @@ export default function PlayerInfo() {
     { id: "advanced", label: "Advanced" },
   ]
 
-  const defaultSeason = isPostSeason ? data.playoff_season || "" : data.season || ""
+  const defaultSeason = isPostSeason ? data.playoff_season || data.playin_season || "" : data.season || ""
   const availableGameLogSeasons = isPostSeason
     ? (Array.isArray(data.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : [])
     : (Array.isArray(data.available_game_log_seasons) ? data.available_game_log_seasons : [])
+  const availablePlayInGameLogSeasons = isPostSeason
+    ? (Array.isArray(data.available_playin_game_log_seasons) ? data.available_playin_game_log_seasons : [])
+    : []
   const seasonGameLogs = isPostSeason ? data.playoff_season_game_logs || {} : data.season_game_logs || {}
+  const playInSeasonGameLogs = isPostSeason ? data.playin_season_game_logs || {} : {}
   const seasonStatsBySeason = isPostSeason ? data.playoff_season_stats_by_season || {} : data.season_stats_by_season || {}
   const availableStatSeasons = isPostSeason
     ? (Array.isArray(data.available_playoff_stat_seasons) ? data.available_playoff_stat_seasons : [])
     : (Array.isArray(data.available_stat_seasons) ? data.available_stat_seasons : [])
-  const seasonSelectorOptions = Array.from(new Set([...availableGameLogSeasons, ...availableStatSeasons]))
+  const seasonSelectorOptions = Array.from(
+    new Set([...availableGameLogSeasons, ...availablePlayInGameLogSeasons, ...availableStatSeasons])
+  )
   const activeGameLogSeason = selectedGameLogSeason || seasonSelectorOptions[0] || defaultSeason
   const activeSeason = availableStatSeasons.includes(activeGameLogSeason)
     ? activeGameLogSeason
@@ -562,13 +672,25 @@ export default function PlayerInfo() {
   const defaultSeasonStats = isPostSeason ? data.playoff_season_stats : data.season_stats
   const activeSeasonStats = seasonStatsBySeason[activeSeason] || defaultSeasonStats || {}
   const defaultSeasonGameLog = isPostSeason ? data.playoff_season_game_log : data.season_game_log
+  const defaultPlayInSeason = isPostSeason ? data.playin_season || "" : ""
+  const defaultPlayInSeasonGameLog = isPostSeason ? data.playin_season_game_log : []
   const activeSeasonGameLog = Array.isArray(seasonGameLogs[activeGameLogSeason])
     ? seasonGameLogs[activeGameLogSeason]
     : Array.isArray(defaultSeasonGameLog) && activeGameLogSeason === defaultSeason
       ? defaultSeasonGameLog
       : []
-  const groupedGameLogRows = getGroupedGameLogRows(activeSeasonGameLog, splitMode)
-  const gameLogAverages = getGameLogAverages(activeSeasonGameLog)
+  const activePlayInSeasonGameLog = Array.isArray(playInSeasonGameLogs[activeGameLogSeason])
+    ? playInSeasonGameLogs[activeGameLogSeason]
+    : Array.isArray(defaultPlayInSeasonGameLog) && activeGameLogSeason === defaultPlayInSeason
+      ? defaultPlayInSeasonGameLog
+      : []
+  const groupedGameLogRows = isPostSeason
+    ? getPostSeasonGameLogRows(activePlayInSeasonGameLog, activeSeasonGameLog)
+    : getGroupedGameLogRows(activeSeasonGameLog, splitMode)
+  const totalDisplayedGameLogCount = isPostSeason
+    ? activePlayInSeasonGameLog.length + activeSeasonGameLog.length
+    : activeSeasonGameLog.length
+  const gameLogAverages = isPostSeason ? null : getGameLogAverages(activeSeasonGameLog)
   const fallbackLastGame = isPostSeason ? data.playoff_last_game : data.last_game
   const fallbackLastFiveGames = isPostSeason ? data.playoff_last_5_games : data.last_5_games
   const activeLastGame = activeSeasonGameLog[0] || fallbackLastGame || null
@@ -605,7 +727,10 @@ export default function PlayerInfo() {
   const careerGameHighsByStat = getGameHighsByStat(allTimeGameEntries, gameHighStatCategories)
   const selectedGameHighsByStat = getGameHighsByStat(selectedGameHighEntries, gameHighStatCategories)
   const hasActiveSeasonStats = Number(activeSeasonStats?.gp || 0) > 0
-  const noPostSeasonData = isPostSeason && availableGameLogSeasons.length === 0 && availableStatSeasons.length === 0
+  const noPostSeasonData = isPostSeason &&
+    availableGameLogSeasons.length === 0 &&
+    availablePlayInGameLogSeasons.length === 0 &&
+    availableStatSeasons.length === 0
 
   function renderPostSeasonToggle() {
     return (
@@ -1022,12 +1147,16 @@ export default function PlayerInfo() {
                   <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Season Game Logs</p>
+                        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                          {isPostSeason ? "Post-Season Game Logs" : "Season Game Logs"}
+                        </p>
                         <h2 className="mt-2 text-2xl font-semibold text-white">
-                          {activeSeasonGameLog.length} Games Played
+                          {totalDisplayedGameLogCount} Games Played
                         </h2>
                         <p className="mt-2 text-sm text-slate-300">
-                          Full season game log with the expanded box score breakdown for each game.
+                          {isPostSeason
+                            ? "PlayIn and playoff rounds are grouped in progression order."
+                            : "Full season game log with the expanded box score breakdown for each game."}
                         </p>
                       </div>
 
@@ -1054,22 +1183,24 @@ export default function PlayerInfo() {
                           </select>
                         </label>
 
-                        <label className="flex flex-col gap-2 text-sm text-slate-300 sm:items-start">
-                          <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">View</span>
-                          <select
-                            value={splitMode}
-                            onChange={event => setSplitMode(event.target.value)}
-                            className="w-fit rounded-xl border border-white/10 bg-slate-950/70 pl-2 pr-1 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
-                          >
-                            <option value="default">Default</option>
-                            <option value="week">Week</option>
-                            <option value="month">Month</option>
-                          </select>
-                        </label>
+                        {!isPostSeason && (
+                          <label className="flex flex-col gap-2 text-sm text-slate-300 sm:items-start">
+                            <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">View</span>
+                            <select
+                              value={splitMode}
+                              onChange={event => setSplitMode(event.target.value)}
+                              className="w-fit rounded-xl border border-white/10 bg-slate-950/70 pl-2 pr-1 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                            >
+                              <option value="default">Default</option>
+                              <option value="week">Week</option>
+                              <option value="month">Month</option>
+                            </select>
+                          </label>
+                        )}
                       </div>
                     </div>
 
-                    {activeSeasonGameLog.length > 0 ? (
+                    {totalDisplayedGameLogCount > 0 ? (
                       <div className="mt-5 w-[calc(100%-0.5rem)] overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-950/45 pb-3">
                         <div
                           ref={gameLogScrollRef}
