@@ -67,15 +67,22 @@ def fetch_game_logs_by_season(
     season_logs = {}
 
     for season_id in season_ids:
-        gamelog = run_with_retries(
-            lambda: playergamelog.PlayerGameLog(
-                player_id=player_id,
-                season=season_id,
-                season_type_all_star=season_type_all_star,
-                timeout=NBA_API_TIMEOUT_SECONDS,
+        try:
+            gamelog = run_with_retries(
+                lambda: playergamelog.PlayerGameLog(
+                    player_id=player_id,
+                    season=season_id,
+                    season_type_all_star=season_type_all_star,
+                    timeout=NBA_API_TIMEOUT_SECONDS,
+                )
             )
-        )
-        season_logs[season_id] = gamelog.get_data_frames()[0].to_dict("records")
+            season_logs[season_id] = gamelog.get_data_frames()[0].to_dict("records")
+        except KeyError as error:
+            # PlayIn queries can sporadically return payloads without result sets.
+            if season_type_all_star == "PlayIn" and str(error).strip("'") == "resultSet":
+                season_logs[season_id] = []
+                continue
+            raise
 
     return season_logs
 
@@ -166,6 +173,12 @@ def fetch_player_by_name(name: str):
     latest_playoff_season = (
         playoff_season_ids_to_store[0] if playoff_season_ids_to_store else None
     )
+    playin_season_logs = fetch_game_logs_by_season(
+        player_id,
+        season_ids_to_store,
+        season_type_all_star="PlayIn",
+    )
+    latest_playin_season = season_ids_to_store[0] if season_ids_to_store else None
 
     summary_data = {
         "player_id": player_id,
@@ -178,6 +191,9 @@ def fetch_player_by_name(name: str):
         "playoff_game_log": playoff_season_logs.get(latest_playoff_season, []),
         "playoff_season_game_log": playoff_season_logs.get(latest_playoff_season, []),
         "playoff_season_game_logs": playoff_season_logs,
+        "playin_game_log": playin_season_logs.get(latest_playin_season, []),
+        "playin_season_game_log": playin_season_logs.get(latest_playin_season, []),
+        "playin_season_game_logs": playin_season_logs,
     }
 
     player_cache.update_one(
@@ -221,6 +237,12 @@ def fetch_player_data(player_id: int):
     latest_playoff_season = (
         playoff_season_ids_to_store[0] if playoff_season_ids_to_store else None
     )
+    playin_season_logs = fetch_game_logs_by_season(
+        player_id,
+        season_ids_to_store,
+        season_type_all_star="PlayIn",
+    )
+    latest_playin_season = season_ids_to_store[0] if season_ids_to_store else None
 
     return {
         "player_id": player_id,
@@ -233,4 +255,7 @@ def fetch_player_data(player_id: int):
         "playoff_game_log": playoff_season_logs.get(latest_playoff_season, []),
         "playoff_season_game_log": playoff_season_logs.get(latest_playoff_season, []),
         "playoff_season_game_logs": playoff_season_logs,
+        "playin_game_log": playin_season_logs.get(latest_playin_season, []),
+        "playin_season_game_log": playin_season_logs.get(latest_playin_season, []),
+        "playin_season_game_logs": playin_season_logs,
     }

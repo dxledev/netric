@@ -89,5 +89,10 @@ def has_complete_cached_season_logs(cached_player):
         data.get("playoff_season_game_logs"),
         data.get("playoff_game_log"),
     )
+    playin_complete = has_complete_log_set(
+        expected_season_ids,
+        data.get("playin_season_game_logs"),
+        data.get("playin_game_log"),
+    )
 
-    return regular_complete and playoff_complete
+    return regular_complete and playoff_complete and playin_complete

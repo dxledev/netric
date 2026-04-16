@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 5
+SUMMARY_VERSION = 6
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 
@@ -215,6 +215,20 @@ def build_playoff_season_game_logs(playoff_career_stats: pd.DataFrame, data: dic
     return {latest_season_id: normalize_game_log(pd.DataFrame(raw_game_log))}
 
 
+def build_playin_season_game_logs(data: dict):
+    raw_logs_by_season = data.get("playin_season_game_logs")
+
+    if isinstance(raw_logs_by_season, dict) and raw_logs_by_season:
+        normalized_logs = {}
+
+        for season_id in sort_season_ids(raw_logs_by_season.keys()):
+            normalized_logs[str(season_id)] = normalize_game_log(pd.DataFrame(raw_logs_by_season[season_id]))
+
+        return normalized_logs
+
+    return {}
+
+
 def build_player_summary_from_data(player_id: int, data: dict):
     if "career_stats" not in data:
         raise HTTPException(status_code=404, detail="Invalid cache format")
@@ -267,9 +281,21 @@ def build_player_summary_from_data(player_id: int, data: dict):
         if playoff_latest_season_id
         else []
     )
+    playin_season_game_logs = build_playin_season_game_logs(data)
+    playin_latest_season_id = (
+        str(sort_season_ids(playin_season_game_logs.keys())[0])
+        if playin_season_game_logs
+        else None
+    )
+    normalized_playin_games = (
+        playin_season_game_logs.get(playin_latest_season_id, [])
+        if playin_latest_season_id
+        else []
+    )
 
     last_game = normalized_games[0] if normalized_games else None
     playoff_last_game = normalized_playoff_games[0] if normalized_playoff_games else None
+    playin_last_game = normalized_playin_games[0] if normalized_playin_games else None
 
     return {
         "player_id": int(player_id),
@@ -298,6 +324,12 @@ def build_player_summary_from_data(player_id: int, data: dict):
         "playoff_season_game_log": normalized_playoff_games,
         "playoff_season_game_logs": playoff_season_game_logs,
         "available_playoff_game_log_seasons": sort_season_ids(playoff_season_game_logs.keys()),
+        "playin_season": playin_latest_season_id,
+        "playin_last_game": playin_last_game,
+        "playin_last_5_games": normalized_playin_games[:5],
+        "playin_season_game_log": normalized_playin_games,
+        "playin_season_game_logs": playin_season_game_logs,
+        "available_playin_game_log_seasons": sort_season_ids(playin_season_game_logs.keys()),
         "headshot_url": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png",
     }
 
