@@ -616,14 +616,14 @@ export default function PlayerInfo() {
           onClick={() => setIsPostSeason(current => !current)}
           aria-pressed={isPostSeason}
           aria-label="Toggle postseason view"
-          className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border transition-all duration-300 ${
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-300 ${
             isPostSeason
               ? "border-blue-300/35 bg-blue-400/20 text-blue-100 hover:bg-blue-400/25"
               : "border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-200"
           }`}
         >
           {isPostSeason && (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-2 w-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
               <path
                 fillRule="evenodd"
                 d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8a1 1 0 0 1-1.42-.005l-4-4a1 1 0 1 1 1.415-1.414l3.293 3.293 7.294-7.294a1 1 0 0 1 1.412.006Z"
@@ -1235,36 +1235,37 @@ export default function PlayerInfo() {
                 {tab === "career" && (
                   <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
                     <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Game Highs</p>
-                        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Game Highs</p>
+                      <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
                           <h2 className="text-2xl font-semibold text-white">
                             {activeGameHighSeason === "all-time" ? "All-Time Single-Game Highs" : `Season ${activeGameHighSeason} Game Highs`}
                           </h2>
-
-                          <div className="flex items-start gap-4">
-                            {renderPostSeasonToggle()}
-
-                            <label className="flex w-fit flex-col gap-2 text-sm text-slate-300">
-                              <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">Scope</span>
-                              <select
-                                value={activeGameHighSeason}
-                                onChange={event => setSelectedGameHighSeason(event.target.value)}
-                                className="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
-                              >
-                                {gameHighSeasonOptions.map(season => (
-                                  <option key={season} value={season}>
-                                    {season === "all-time" ? "All-Time" : season}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
+                          <p className="mt-2 text-sm text-slate-300">
+                          Each category shows a single-game peak. Season highs are highlighted when they match the all-time career high.
+                          </p>
                         </div>
 
-                        <p className="mt-2 text-sm text-slate-300">
-                          Each category shows a single-game peak. Season highs are highlighted when they match the all-time career high.
-                        </p>
+                        <div className="flex items-start gap-4">
+                          {renderPostSeasonToggle()}
+
+                          <label className="flex w-fit flex-col gap-2 text-sm text-slate-300">
+                            <span className="text-xs uppercase tracking-[0.22em] text-slate-400">Scope</span>
+                            <select
+                              value={activeGameHighSeason}
+                              onChange={event => setSelectedGameHighSeason(event.target.value)}
+                              className="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                            >
+                              {gameHighSeasonOptions.map(season => (
+                                <option key={season} value={season}>
+                                  {season === "all-time" ? "All-Time" : season}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
                       </div>
+                    </div>
 
                     {selectedGameHighEntries.length > 0 ? (
                       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
