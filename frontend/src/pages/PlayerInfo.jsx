@@ -143,6 +143,7 @@ export default function PlayerInfo() {
   const [data, setData] = useState(cachedSummary)
   const [loading, setLoading] = useState(() => !cachedSummary)
   const [isFavorited, setIsFavorited] = useState(() => isPlayerFavorited(normalizedPlayerId))
+  const [loadError, setLoadError] = useState("")
   const gameLogScrollRef = useRef(null)
 
   useEffect(() => {
@@ -164,10 +165,19 @@ export default function PlayerInfo() {
           return
         }
 
+        setLoadError("")
         setData(res.data)
         writePlayerSummaryCache(id, res.data)
       })
-      .catch(err => console.error(err))
+      .catch(err => {
+        console.error(err)
+
+        if (ignore) {
+          return
+        }
+
+        setLoadError("Unable to load this player summary right now. Please try again shortly.")
+      })
       .finally(() => {
         if (ignore) {
           return
@@ -252,6 +262,11 @@ export default function PlayerInfo() {
             <p className="mt-3 text-sm text-slate-300 sm:text-base">
               Pulling the latest season summary and recent game data.
             </p>
+            {!loading && loadError && (
+              <p className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {loadError}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -871,6 +886,8 @@ export default function PlayerInfo() {
   }
 
   const activeLastGameIndex = findGameLogIndex(activeLastGame)
+  const playerName = data?.name || "Player"
+  const playerHeadshotUrl = data?.headshot_url || `https://cdn.nba.com/headshots/nba/latest/1040x760/${normalizedPlayerId}.png`
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -891,8 +908,8 @@ export default function PlayerInfo() {
                   <div className="relative">
                     <div className="absolute inset-0 rounded-[1.75rem] bg-gradient-to-br from-blue-400/25 via-cyan-300/15 to-emerald-300/10 blur-xl" />
                     <img
-                      src={data.headshot_url}
-                      alt={data.name}
+                      src={playerHeadshotUrl}
+                      alt={playerName}
                       className="relative h-32 w-32 rounded-[1.5rem] border border-white/15 object-cover shadow-xl shadow-black/25 transition-transform duration-500 hover:scale-[1.03] sm:h-36 sm:w-36"
                     />
                   </div>
@@ -924,7 +941,7 @@ export default function PlayerInfo() {
                       </button>
                     </div>
                     <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                      {data.name}
+                      {playerName}
                     </h1>
                     <p className="mt-2 text-sm text-slate-300 sm:text-base">
                       {isPostSeason ? "Post-Season" : "Season"} {activeSeason || "-"} • {formatNumber(activeSeasonStats?.gp, 0)} games played
