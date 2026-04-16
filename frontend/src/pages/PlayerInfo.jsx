@@ -139,6 +139,7 @@ export default function PlayerInfo() {
   const [selectedGameLogSeason, setSelectedGameLogSeason] = useState("")
   const [selectedGameHighSeason, setSelectedGameHighSeason] = useState("all-time")
   const [splitMode, setSplitMode] = useState("default")
+  const [isPostSeason, setIsPostSeason] = useState(false)
   const [data, setData] = useState(cachedSummary)
   const [loading, setLoading] = useState(() => !cachedSummary)
   const [isFavorited, setIsFavorited] = useState(() => isPlayerFavorited(normalizedPlayerId))
@@ -198,16 +199,19 @@ export default function PlayerInfo() {
   }, [normalizedPlayerId])
 
   useEffect(() => {
-    const availableSeasons = Array.isArray(data?.available_game_log_seasons) ? data.available_game_log_seasons : []
+    const availableSeasons = isPostSeason
+      ? (Array.isArray(data?.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : [])
+      : (Array.isArray(data?.available_game_log_seasons) ? data.available_game_log_seasons : [])
+    const fallbackSeason = isPostSeason ? data?.playoff_season || "" : data?.season || ""
     const requestedSeason = searchParams.get("season")
     const nextSeason = availableSeasons.includes(requestedSeason)
       ? requestedSeason
-      : availableSeasons[0] || data?.season || ""
+      : availableSeasons[0] || fallbackSeason
 
     setSelectedGameLogSeason(currentSeason =>
-      availableSeasons.includes(currentSeason) || currentSeason === nextSeason ? currentSeason : nextSeason
+      availableSeasons.includes(currentSeason) ? currentSeason : nextSeason
     )
-  }, [data, searchParams])
+  }, [data, isPostSeason, searchParams])
 
   useEffect(() => {
     const container = gameLogScrollRef.current
@@ -541,22 +545,36 @@ export default function PlayerInfo() {
     { id: "advanced", label: "Advanced" },
   ]
 
-  const availableGameLogSeasons = Array.isArray(data.available_game_log_seasons) ? data.available_game_log_seasons : []
-  const seasonGameLogs = data.season_game_logs || {}
-  const seasonStatsBySeason = data.season_stats_by_season || {}
-  const availableStatSeasons = Array.isArray(data.available_stat_seasons) ? data.available_stat_seasons : []
-  const activeGameLogSeason = selectedGameLogSeason || availableGameLogSeasons[0] || data.season || ""
-  const activeSeason = availableStatSeasons.includes(activeGameLogSeason) ? activeGameLogSeason : data.season
-  const activeSeasonStats = seasonStatsBySeason[activeSeason] || data.season_stats
+  const defaultSeason = isPostSeason ? data.playoff_season || "" : data.season || ""
+  const availableGameLogSeasons = isPostSeason
+    ? (Array.isArray(data.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : [])
+    : (Array.isArray(data.available_game_log_seasons) ? data.available_game_log_seasons : [])
+  const seasonGameLogs = isPostSeason ? data.playoff_season_game_logs || {} : data.season_game_logs || {}
+  const seasonStatsBySeason = isPostSeason ? data.playoff_season_stats_by_season || {} : data.season_stats_by_season || {}
+  const availableStatSeasons = isPostSeason
+    ? (Array.isArray(data.available_playoff_stat_seasons) ? data.available_playoff_stat_seasons : [])
+    : (Array.isArray(data.available_stat_seasons) ? data.available_stat_seasons : [])
+  const seasonSelectorOptions = Array.from(new Set([...availableGameLogSeasons, ...availableStatSeasons]))
+  const activeGameLogSeason = selectedGameLogSeason || seasonSelectorOptions[0] || defaultSeason
+  const activeSeason = availableStatSeasons.includes(activeGameLogSeason)
+    ? activeGameLogSeason
+    : availableStatSeasons[0] || defaultSeason || activeGameLogSeason
+  const defaultSeasonStats = isPostSeason ? data.playoff_season_stats : data.season_stats
+  const activeSeasonStats = seasonStatsBySeason[activeSeason] || defaultSeasonStats || {}
+  const defaultSeasonGameLog = isPostSeason ? data.playoff_season_game_log : data.season_game_log
   const activeSeasonGameLog = Array.isArray(seasonGameLogs[activeGameLogSeason])
     ? seasonGameLogs[activeGameLogSeason]
-    : Array.isArray(data.season_game_log)
-      ? data.season_game_log
+    : Array.isArray(defaultSeasonGameLog) && activeGameLogSeason === defaultSeason
+      ? defaultSeasonGameLog
       : []
   const groupedGameLogRows = getGroupedGameLogRows(activeSeasonGameLog, splitMode)
   const gameLogAverages = getGameLogAverages(activeSeasonGameLog)
-  const activeLastGame = activeSeasonGameLog[0] || data.last_game || null
-  const activeLastFiveGames = activeSeasonGameLog.slice(0, 5)
+  const fallbackLastGame = isPostSeason ? data.playoff_last_game : data.last_game
+  const fallbackLastFiveGames = isPostSeason ? data.playoff_last_5_games : data.last_5_games
+  const activeLastGame = activeSeasonGameLog[0] || fallbackLastGame || null
+  const activeLastFiveGames = activeSeasonGameLog.length > 0
+    ? activeSeasonGameLog.slice(0, 5)
+    : (Array.isArray(fallbackLastFiveGames) ? fallbackLastFiveGames.slice(0, 5) : [])
   const gameHighStatCategories = [
     { key: "pts", label: "PTS" },
     { key: "reb", label: "REB" },
@@ -570,13 +588,7 @@ export default function PlayerInfo() {
     { key: "min", label: "MIN" },
     { key: "plus_minus", label: "+/-" },
   ]
-  const gameHighSeasonOptions = Array.from(
-    new Set([
-      "all-time",
-      ...availableGameLogSeasons,
-      ...Object.keys(seasonGameLogs || {}),
-    ])
-  )
+  const gameHighSeasonOptions = Array.from(new Set(["all-time", ...availableGameLogSeasons, ...Object.keys(seasonGameLogs || {})]))
   const activeGameHighSeason = gameHighSeasonOptions.includes(selectedGameHighSeason)
     ? selectedGameHighSeason
     : "all-time"
@@ -592,6 +604,9 @@ export default function PlayerInfo() {
     }))
   const careerGameHighsByStat = getGameHighsByStat(allTimeGameEntries, gameHighStatCategories)
   const selectedGameHighsByStat = getGameHighsByStat(selectedGameHighEntries, gameHighStatCategories)
+  const hasActiveSeasonStats = Number(activeSeasonStats?.gp || 0) > 0
+  const noPostSeasonData = isPostSeason && availableGameLogSeasons.length === 0 && availableStatSeasons.length === 0
+  const postSeasonToggleText = isPostSeason ? "Post-Season: On" : "Post-Season: Off"
 
   const primaryStats = [
     { label: "PTS", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.pts), accent: "from-blue-500/30 to-cyan-400/10" },
@@ -759,7 +774,7 @@ export default function PlayerInfo() {
                       {data.name}
                     </h1>
                     <p className="mt-2 text-sm text-slate-300 sm:text-base">
-                      Season {activeSeason} • {formatNumber(activeSeasonStats?.gp, 0)} games played
+                      {isPostSeason ? "Post-Season" : "Season"} {activeSeason || "-"} • {formatNumber(activeSeasonStats?.gp, 0)} games played
                     </p>
                   </div>
                 </div>
@@ -803,6 +818,14 @@ export default function PlayerInfo() {
                 {tab === "season" && (
                   <div className="grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
                       <div className="grid gap-5">
+                        {isPostSeason && !hasActiveSeasonStats && (
+                          <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-slate-900/40 p-5 text-sm text-slate-400">
+                            {noPostSeasonData
+                              ? "This player does not have postseason stats yet."
+                              : `This player has no postseason stats for ${activeSeason || activeGameLogSeason || "the selected season"}.`}
+                          </div>
+                        )}
+
                         {seasonSections.map(section => (
                           <div
                             key={section.title}
@@ -834,20 +857,39 @@ export default function PlayerInfo() {
                             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Season View</p>
                             <p className="mt-2 text-sm text-slate-300">Switch seasons to compare year-over-year performance.</p>
 
-                            <label className="mt-4 flex w-full flex-col items-start gap-2 text-sm text-slate-300">
-                              <span className="text-xs uppercase tracking-[0.22em] text-slate-400">Season</span>
-                              <select
-                                value={activeGameLogSeason}
-                                onChange={event => setSelectedGameLogSeason(event.target.value)}
-                                className="min-w-36 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-left text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                            <div className="mt-4 flex w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                              <label className="flex w-full flex-col items-start gap-2 text-sm text-slate-300 sm:w-auto">
+                                <span className="text-xs uppercase tracking-[0.22em] text-slate-400">Season</span>
+                                <select
+                                  value={activeGameLogSeason}
+                                  onChange={event => setSelectedGameLogSeason(event.target.value)}
+                                  disabled={seasonSelectorOptions.length === 0}
+                                  className="min-w-36 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-left text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                                >
+                                  {seasonSelectorOptions.length > 0 ? (
+                                    seasonSelectorOptions.map(season => (
+                                      <option key={season} value={season}>
+                                        {season}
+                                      </option>
+                                    ))
+                                  ) : (
+                                    <option value="">No seasons</option>
+                                  )}
+                                </select>
+                              </label>
+
+                              <button
+                                type="button"
+                                onClick={() => setIsPostSeason(current => !current)}
+                                className={`w-fit rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-300 ${
+                                  isPostSeason
+                                    ? "border-blue-300/35 bg-blue-400/20 text-blue-100 hover:bg-blue-400/25"
+                                    : "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                                }`}
                               >
-                                {availableGameLogSeasons.map(season => (
-                                  <option key={season} value={season}>
-                                    {season}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                                {postSeasonToggleText}
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -883,7 +925,11 @@ export default function PlayerInfo() {
                           </button>
                         ) : (
                           <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-slate-900/40 p-5 text-sm text-slate-400">
-                            Recent game data is not available for this player yet.
+                            {isPostSeason
+                              ? (noPostSeasonData
+                                ? "This player does not have postseason game data yet."
+                                : `No postseason games are available for ${activeGameLogSeason || "this season"}.`)
+                              : "Recent game data is not available for this player yet."}
                           </div>
                         )}
 
@@ -974,13 +1020,18 @@ export default function PlayerInfo() {
                           <select
                             value={activeGameLogSeason}
                             onChange={event => setSelectedGameLogSeason(event.target.value)}
+                            disabled={seasonSelectorOptions.length === 0}
                             className="w-fit rounded-xl border border-white/10 bg-slate-950/70 pl-2 pr-1 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
                           >
-                            {availableGameLogSeasons.map(season => (
-                              <option key={season} value={season}>
-                                {season}
-                              </option>
-                            ))}
+                            {seasonSelectorOptions.length > 0 ? (
+                              seasonSelectorOptions.map(season => (
+                                <option key={season} value={season}>
+                                  {season}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="">No seasons</option>
+                            )}
                           </select>
                         </label>
 
@@ -996,6 +1047,18 @@ export default function PlayerInfo() {
                             <option value="month">Month</option>
                           </select>
                         </label>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsPostSeason(current => !current)}
+                          className={`w-fit rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-300 ${
+                            isPostSeason
+                              ? "border-blue-300/35 bg-blue-400/20 text-blue-100 hover:bg-blue-400/25"
+                              : "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                          }`}
+                        >
+                          {postSeasonToggleText}
+                        </button>
                       </div>
                     </div>
 
@@ -1152,7 +1215,11 @@ export default function PlayerInfo() {
                       </div>
                     ) : (
                       <div className="mt-5 rounded-[1.25rem] border border-dashed border-white/12 bg-slate-900/35 p-6 text-sm text-slate-400">
-                        Season game log data is not available for this player yet.
+                        {isPostSeason
+                          ? (noPostSeasonData
+                            ? "No playoff game logs are available for this player."
+                            : `No playoff game logs are available for ${activeGameLogSeason || "this season"}.`)
+                          : "Season game log data is not available for this player yet."}
                       </div>
                     )}
                   </div>
@@ -1171,20 +1238,34 @@ export default function PlayerInfo() {
                         </p>
                       </div>
 
-                      <label className="flex w-fit flex-col gap-2 text-sm text-slate-300">
-                        <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">Scope</span>
-                        <select
-                          value={activeGameHighSeason}
-                          onChange={event => setSelectedGameHighSeason(event.target.value)}
-                          className="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                      <div className="flex flex-wrap items-end gap-3">
+                        <label className="flex w-fit flex-col gap-2 text-sm text-slate-300">
+                          <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">Scope</span>
+                          <select
+                            value={activeGameHighSeason}
+                            onChange={event => setSelectedGameHighSeason(event.target.value)}
+                            className="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
+                          >
+                            {gameHighSeasonOptions.map(season => (
+                              <option key={season} value={season}>
+                                {season === "all-time" ? "All-Time" : season}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsPostSeason(current => !current)}
+                          className={`w-fit rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-300 ${
+                            isPostSeason
+                              ? "border-blue-300/35 bg-blue-400/20 text-blue-100 hover:bg-blue-400/25"
+                              : "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                          }`}
                         >
-                          {gameHighSeasonOptions.map(season => (
-                            <option key={season} value={season}>
-                              {season === "all-time" ? "All-Time" : season}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          {postSeasonToggleText}
+                        </button>
+                      </div>
                     </div>
 
                     {selectedGameHighEntries.length > 0 ? (
@@ -1269,7 +1350,11 @@ export default function PlayerInfo() {
                       </div>
                     ) : (
                       <div className="mt-5 rounded-[1.25rem] border border-dashed border-white/12 bg-slate-900/35 p-6 text-sm text-slate-400">
-                        Game log data is not available yet, so game highs cannot be calculated.
+                        {isPostSeason
+                          ? (noPostSeasonData
+                            ? "This player has no postseason game data yet, so playoff game highs are unavailable."
+                            : `No postseason game logs are available for ${activeGameHighSeason === "all-time" ? "the selected scope" : activeGameHighSeason}.`)
+                          : "Game log data is not available yet, so game highs cannot be calculated."}
                       </div>
                     )}
                   </div>
@@ -1277,6 +1362,19 @@ export default function PlayerInfo() {
 
                 {tab === "advanced" && (
                   <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-8 text-center shadow-lg shadow-black/20">
+                    <div className="mb-5 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => setIsPostSeason(current => !current)}
+                        className={`w-fit rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-300 ${
+                          isPostSeason
+                            ? "border-blue-300/35 bg-blue-400/20 text-blue-100 hover:bg-blue-400/25"
+                            : "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                        }`}
+                      >
+                        {postSeasonToggleText}
+                      </button>
+                    </div>
                     <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Advanced</p>
                     <h2 className="mt-3 text-2xl font-semibold text-white">Advanced metrics placeholder</h2>
                     <p className="mt-3 text-sm text-slate-300">
