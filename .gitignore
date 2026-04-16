@@ -6,3 +6,5 @@ frontend/node_modules
 node_modules
 __pycache__/
 *.pyc
+nohup.out
+backend/nohup.out
