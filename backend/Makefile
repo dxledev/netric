@@ -32,6 +32,13 @@ run:
 	nohup $(UVICORN) $(APP) --reload --host $(HOST) --port $(PORT) &
 
 # -------------------------
+# Reload server (restart dev server)
+# -------------------------
+reload:
+	-pkill -f "$(UVICORN) $(APP) --reload --host $(HOST) --port $(PORT)"
+	nohup $(UVICORN) $(APP) --reload --host $(HOST) --port $(PORT) &
+
+# -------------------------
 # Production run (no reload)
 # -------------------------
 prod:
@@ -57,6 +64,7 @@ help:
 	@echo "  make setup    - Create venv and install deps"
 	@echo "  make install  - Install deps"
 	@echo "  make run      - Run dev server"
+	@echo "  make reload   - Restart dev server"
 	@echo "  make prod     - Run production server"
 	@echo "  make freeze   - Save requirements.txt"
 	@echo "  make clean    - Remove virtual environment"
