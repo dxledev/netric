@@ -609,21 +609,21 @@ export default function PlayerInfo() {
 
   function renderPostSeasonToggle() {
     return (
-      <div className="flex flex-col gap-2 text-sm text-slate-300 sm:items-start">
-        <span className="pl-1 text-xs uppercase tracking-[0.22em] text-slate-400">Post-Season</span>
+      <div className="flex flex-col items-center gap-2 text-sm text-slate-300">
+        <span className="text-center text-xs uppercase tracking-[0.22em] text-slate-400">Post-Season</span>
         <button
           type="button"
           onClick={() => setIsPostSeason(current => !current)}
           aria-pressed={isPostSeason}
           aria-label="Toggle postseason view"
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-300 ${
+          className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border transition-all duration-300 ${
             isPostSeason
               ? "border-blue-300/35 bg-blue-400/20 text-blue-100 hover:bg-blue-400/25"
               : "border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-200"
           }`}
         >
           {isPostSeason && (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-2 w-2">
               <path
                 fillRule="evenodd"
                 d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8a1 1 0 0 1-1.42-.005l-4-4a1 1 0 1 1 1.415-1.414l3.293 3.293 7.294-7.294a1 1 0 0 1 1.412.006Z"
@@ -1234,7 +1234,7 @@ export default function PlayerInfo() {
 
                 {tab === "career" && (
                   <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Game Highs</p>
                         <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -1245,7 +1245,7 @@ export default function PlayerInfo() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap items-end gap-3">
+                      <div className="flex items-end gap-3 sm:mt-8">
                         {renderPostSeasonToggle()}
 
                         <label className="flex w-fit flex-col gap-2 text-sm text-slate-300">
