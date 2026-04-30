@@ -10,8 +10,15 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 6
+SUMMARY_VERSION = 7
 ACTIVE_PLAYER_MATCHES_ONLY = True
+
+SUMMARY_REQUIRED_FIELDS = (
+    "playoff_season_game_logs",
+    "available_playoff_game_log_seasons",
+    "playin_season_game_logs",
+    "available_playin_game_log_seasons",
+)
 
 
 def to_int(value, default=0):
@@ -407,12 +414,19 @@ def build_player_summary(player_id: int):
     if not cached:
         raise HTTPException(status_code=404, detail="Player not cached")
 
-    # If already formatted summary exists
-    if cached.get("summary", {}).get("summary_version") == SUMMARY_VERSION:
-        return cached["summary"]
-
-    # Otherwise build summary from legacy "data"
     if "data" not in cached:
         raise HTTPException(status_code=404, detail="Invalid cache format")
 
-    return build_player_summary_from_data(player_id, cached["data"])
+    cached_summary = cached.get("summary", {})
+    if (
+        cached_summary.get("summary_version") == SUMMARY_VERSION and
+        all(field in cached_summary for field in SUMMARY_REQUIRED_FIELDS)
+    ):
+        return cached_summary
+
+    summary = build_player_summary_from_data(player_id, cached["data"])
+    player_cache.update_one(
+        {"player_id": player_id},
+        {"$set": {"summary": summary}},
+    )
+    return summary
