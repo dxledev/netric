@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 10
+SUMMARY_VERSION = 11
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -297,6 +297,71 @@ def normalize_season_game_log_mapping(raw_logs_by_season):
     return normalized_logs
 
 
+def has_raw_games(raw_games):
+    if isinstance(raw_games, list):
+        return len(raw_games) > 0
+
+    return False
+
+
+def get_raw_log_season_ids(raw_logs_by_season):
+    if not isinstance(raw_logs_by_season, dict):
+        return set()
+
+    return {
+        str(season_id)
+        for season_id, raw_games in raw_logs_by_season.items()
+        if has_raw_games(raw_games)
+    }
+
+
+def get_active_stat_season_ids(raw_stats):
+    if not isinstance(raw_stats, list):
+        return set()
+
+    active_seasons = set()
+
+    for season in raw_stats:
+        if not isinstance(season, dict):
+            continue
+
+        try:
+            games_played = float(season.get("GP") or 0)
+        except (TypeError, ValueError):
+            games_played = 0
+
+        season_id = season.get("SEASON_ID")
+        if games_played > 0 and season_id is not None:
+            active_seasons.add(str(season_id))
+
+    return active_seasons
+
+
+def has_all_season_ids(summary, field_name, expected_season_ids):
+    if not expected_season_ids:
+        return True
+
+    available_season_ids = {
+        str(season_id)
+        for season_id in summary.get(field_name, [])
+    }
+
+    return expected_season_ids.issubset(available_season_ids)
+
+
+def cached_summary_matches_postseason_data(summary, data):
+    playoff_log_season_ids = get_raw_log_season_ids(data.get("playoff_season_game_logs"))
+    playin_log_season_ids = get_raw_log_season_ids(data.get("playin_season_game_logs"))
+    playoff_stat_season_ids = get_active_stat_season_ids(data.get("playoff_career_stats"))
+    postseason_stat_season_ids = playoff_stat_season_ids | playoff_log_season_ids | playin_log_season_ids
+
+    return (
+        has_all_season_ids(summary, "available_playoff_game_log_seasons", playoff_log_season_ids)
+        and has_all_season_ids(summary, "available_playin_game_log_seasons", playin_log_season_ids)
+        and has_all_season_ids(summary, "available_playoff_stat_seasons", postseason_stat_season_ids)
+    )
+
+
 def build_season_game_logs(career_stats: pd.DataFrame, data: dict):
     raw_logs_by_season = data.get("season_game_logs")
 
@@ -519,7 +584,8 @@ def build_player_summary(player_id: int):
     cached_summary = cached.get("summary", {})
     if (
         cached_summary.get("summary_version") == SUMMARY_VERSION and
-        all(field in cached_summary for field in SUMMARY_REQUIRED_FIELDS)
+        all(field in cached_summary for field in SUMMARY_REQUIRED_FIELDS) and
+        cached_summary_matches_postseason_data(cached_summary, cached["data"])
     ):
         return cached_summary
 

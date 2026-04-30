@@ -77,10 +77,26 @@ export default function GameSummary() {
 
   const requestedSeason = searchParams.get("season") || ""
   const availableGameLogSeasons = Array.isArray(data?.available_game_log_seasons) ? data.available_game_log_seasons : []
+  const availablePlayoffGameLogSeasons = Array.isArray(data?.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : []
+  const availablePlayInGameLogSeasons = Array.isArray(data?.available_playin_game_log_seasons) ? data.available_playin_game_log_seasons : []
+  const availablePostSeasonGameLogSeasons = Array.from(
+    new Set([...availablePlayoffGameLogSeasons, ...availablePlayInGameLogSeasons])
+  )
   const activeSeason = availableGameLogSeasons.includes(requestedSeason)
     ? requestedSeason
     : availableGameLogSeasons[0] || data?.season || ""
   const seasonGames = Array.isArray(data?.season_game_logs?.[activeSeason]) ? data.season_game_logs[activeSeason] : []
+
+  function getPostSeasonGames(seasonId) {
+    const playoffGames = Array.isArray(data?.playoff_season_game_logs?.[seasonId])
+      ? data.playoff_season_game_logs[seasonId]
+      : []
+    const playInGames = Array.isArray(data?.playin_season_game_logs?.[seasonId])
+      ? data.playin_season_game_logs[seasonId]
+      : []
+
+    return [...playoffGames, ...playInGames]
+  }
 
   const resolvedGame = useMemo(() => {
     const seasonMatch = findGameLogByKey(seasonGames, gameKey)
@@ -98,8 +114,24 @@ export default function GameSummary() {
       }
     }
 
+    if (requestedSeason) {
+      const requestedPostSeasonMatch = findGameLogByKey(getPostSeasonGames(requestedSeason), gameKey)
+
+      if (requestedPostSeasonMatch) {
+        return { game: requestedPostSeasonMatch, season: requestedSeason }
+      }
+    }
+
+    for (const seasonId of availablePostSeasonGameLogSeasons) {
+      const nextMatch = findGameLogByKey(getPostSeasonGames(seasonId), gameKey)
+
+      if (nextMatch) {
+        return { game: nextMatch, season: seasonId }
+      }
+    }
+
     return null
-  }, [activeSeason, availableGameLogSeasons, data, gameKey, seasonGames])
+  }, [activeSeason, availableGameLogSeasons, availablePostSeasonGameLogSeasons, data, gameKey, requestedSeason, seasonGames])
 
   const game = resolvedGame?.game || null
   const resolvedSeason = resolvedGame?.season || activeSeason

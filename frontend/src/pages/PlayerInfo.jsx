@@ -708,6 +708,9 @@ export default function PlayerInfo() {
     : Array.isArray(defaultPlayInSeasonGameLog) && activeGameLogSeason === defaultPlayInSeason
       ? defaultPlayInSeasonGameLog
       : []
+  const activePostSeasonGameLog = isPostSeason
+    ? [...activeSeasonGameLog, ...activePlayInSeasonGameLog]
+    : activeSeasonGameLog
   const groupedGameLogRows = isPostSeason
     ? getPostSeasonGameLogRows(activePlayInSeasonGameLog, activeSeasonGameLog)
     : getGroupedGameLogRows(activeSeasonGameLog, splitMode)
@@ -717,9 +720,9 @@ export default function PlayerInfo() {
   const gameLogAverages = isPostSeason ? null : getGameLogAverages(activeSeasonGameLog)
   const fallbackLastGame = isPostSeason ? data.playoff_last_game : data.last_game
   const fallbackLastFiveGames = isPostSeason ? data.playoff_last_5_games : data.last_5_games
-  const activeLastGame = activeSeasonGameLog[0] || fallbackLastGame || null
-  const activeLastFiveGames = activeSeasonGameLog.length > 0
-    ? activeSeasonGameLog.slice(0, 5)
+  const activeLastGame = activePostSeasonGameLog[0] || fallbackLastGame || null
+  const activeLastFiveGames = activePostSeasonGameLog.length > 0
+    ? activePostSeasonGameLog.slice(0, 5)
     : (Array.isArray(fallbackLastFiveGames) ? fallbackLastFiveGames.slice(0, 5) : [])
   const gameHighStatCategories = [
     { key: "pts", label: "PTS" },
@@ -734,16 +737,32 @@ export default function PlayerInfo() {
     { key: "min", label: "MIN" },
     { key: "plus_minus", label: "+/-" },
   ]
-  const gameHighSeasonOptions = Array.from(new Set(["all-time", ...availableGameLogSeasons, ...Object.keys(seasonGameLogs || {})]))
+  const gameHighSeasonOptions = Array.from(
+    new Set([
+      "all-time",
+      ...availableGameLogSeasons,
+      ...availablePlayInGameLogSeasons,
+      ...Object.keys(seasonGameLogs || {}),
+      ...Object.keys(playInSeasonGameLogs || {}),
+    ])
+  )
   const activeGameHighSeason = gameHighSeasonOptions.includes(selectedGameHighSeason)
     ? selectedGameHighSeason
     : "all-time"
-  const allTimeGameEntries = Object.entries(seasonGameLogs || {}).flatMap(([seasonId, games]) =>
-    Array.isArray(games) ? games.map((game, index) => ({ seasonId: String(seasonId), game, index })) : []
-  )
+  const allTimeGameEntries = gameHighSeasonOptions
+    .filter(seasonId => seasonId !== "all-time")
+    .flatMap(seasonId => {
+      const playoffGames = Array.isArray(seasonGameLogs?.[seasonId]) ? seasonGameLogs[seasonId] : []
+      const playInGames = Array.isArray(playInSeasonGameLogs?.[seasonId]) ? playInSeasonGameLogs[seasonId] : []
+
+      return [...playoffGames, ...playInGames].map((game, index) => ({ seasonId: String(seasonId), game, index }))
+    })
   const selectedGameHighEntries = activeGameHighSeason === "all-time"
     ? allTimeGameEntries
-    : (seasonGameLogs[activeGameHighSeason] || []).map((game, index) => ({
+    : [
+      ...(Array.isArray(seasonGameLogs?.[activeGameHighSeason]) ? seasonGameLogs[activeGameHighSeason] : []),
+      ...(Array.isArray(playInSeasonGameLogs?.[activeGameHighSeason]) ? playInSeasonGameLogs[activeGameHighSeason] : []),
+    ].map((game, index) => ({
       seasonId: activeGameHighSeason,
       game,
       index,
@@ -873,21 +892,21 @@ export default function PlayerInfo() {
   }
 
   function findGameLogIndex(targetGame) {
-    if (!targetGame || activeSeasonGameLog.length === 0) {
+    if (!targetGame || activePostSeasonGameLog.length === 0) {
       return -1
     }
 
-    const directMatchIndex = activeSeasonGameLog.findIndex(game => game === targetGame)
+    const directMatchIndex = activePostSeasonGameLog.findIndex(game => game === targetGame)
 
     if (directMatchIndex >= 0) {
       return directMatchIndex
     }
 
     if (targetGame.game_id) {
-      return activeSeasonGameLog.findIndex(game => game?.game_id === targetGame.game_id)
+      return activePostSeasonGameLog.findIndex(game => game?.game_id === targetGame.game_id)
     }
 
-    return activeSeasonGameLog.findIndex(game =>
+    return activePostSeasonGameLog.findIndex(game =>
       game?.game_date === targetGame.game_date &&
       game?.date === targetGame.date &&
       game?.matchup === targetGame.matchup
