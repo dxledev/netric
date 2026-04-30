@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 7
+SUMMARY_VERSION = 10
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -129,6 +129,105 @@ def build_season_stats_by_season(career_stats: pd.DataFrame):
     return season_stats_by_season
 
 
+def parse_minutes(value):
+    if pd.isna(value):
+        return 0.0
+
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return 0.0
+
+    if ":" in raw_value:
+        minutes, seconds = raw_value.split(":", 1)
+        return to_float(minutes) + (to_float(seconds) / 60)
+
+    return to_float(raw_value)
+
+
+def build_season_stats_from_game_logs(games):
+    if not games:
+        return None
+
+    totals = {
+        "gp": len(games),
+        "min_total": 0.0,
+        "pts": 0.0,
+        "ast": 0.0,
+        "reb": 0.0,
+        "stl": 0.0,
+        "blk": 0.0,
+        "tov": 0.0,
+        "pf": 0.0,
+        "fgm": 0.0,
+        "fga": 0.0,
+        "three_pm": 0.0,
+        "three_pa": 0.0,
+        "ftm": 0.0,
+        "fta": 0.0,
+    }
+
+    for game in games:
+        totals["min_total"] += parse_minutes(game.get("min"))
+        totals["pts"] += to_float(game.get("pts"))
+        totals["ast"] += to_float(game.get("ast"))
+        totals["reb"] += to_float(game.get("reb"))
+        totals["stl"] += to_float(game.get("stl"))
+        totals["blk"] += to_float(game.get("blk"))
+        totals["tov"] += to_float(game.get("tov"))
+        totals["pf"] += to_float(game.get("pf"))
+        totals["fgm"] += to_float(game.get("fgm"))
+        totals["fga"] += to_float(game.get("fga"))
+        totals["three_pm"] += to_float(game.get("three_pm"))
+        totals["three_pa"] += to_float(game.get("three_pa"))
+        totals["ftm"] += to_float(game.get("ftm"))
+        totals["fta"] += to_float(game.get("fta"))
+
+    fgm = totals["fgm"]
+    fga = totals["fga"]
+    three_pm = totals["three_pm"]
+    three_pa = totals["three_pa"]
+    ftm = totals["ftm"]
+    fta = totals["fta"]
+    pts = totals["pts"]
+    efg_pct, ts_pct = build_efficiency_metrics(fgm, three_pm, fga, fta, pts)
+
+    return {
+        **totals,
+        "fg_pct": round(fgm / fga, 3) if fga > 0 else 0.0,
+        "fg3_pct": round(three_pm / three_pa, 3) if three_pa > 0 else 0.0,
+        "ft_pct": round(ftm / fta, 3) if fta > 0 else 0.0,
+        "efg_pct": efg_pct,
+        "ts_pct": ts_pct,
+        "fg2pm": fgm - three_pm,
+        "fg2pa": fga - three_pa,
+    }
+
+
+def add_missing_stats_from_game_logs(season_stats_by_season, season_game_logs):
+    for season_id, games in season_game_logs.items():
+        if str(season_id) in season_stats_by_season or not games:
+            continue
+
+        season_stats = build_season_stats_from_game_logs(games)
+        if season_stats:
+            season_stats_by_season[str(season_id)] = season_stats
+
+    return season_stats_by_season
+
+
+def combine_season_game_logs(*season_game_log_sets):
+    combined_logs = {}
+
+    for season_game_logs in season_game_log_sets:
+        for season_id, games in season_game_logs.items():
+            if not games:
+                continue
+
+            combined_logs.setdefault(str(season_id), []).extend(games)
+
+    return combined_logs
+
+
 def normalize_game_log(game_log: pd.DataFrame):
     if game_log.empty:
         return []
@@ -187,51 +286,49 @@ def normalize_game_log(game_log: pd.DataFrame):
     return normalized_games
 
 
+def normalize_season_game_log_mapping(raw_logs_by_season):
+    normalized_logs = {}
+
+    for season_id in sort_season_ids(raw_logs_by_season.keys()):
+        normalized_games = normalize_game_log(pd.DataFrame(raw_logs_by_season[season_id]))
+        if normalized_games:
+            normalized_logs[str(season_id)] = normalized_games
+
+    return normalized_logs
+
+
 def build_season_game_logs(career_stats: pd.DataFrame, data: dict):
     raw_logs_by_season = data.get("season_game_logs")
 
     if isinstance(raw_logs_by_season, dict) and raw_logs_by_season:
-        normalized_logs = {}
-
-        for season_id in sort_season_ids(raw_logs_by_season.keys()):
-            normalized_logs[str(season_id)] = normalize_game_log(pd.DataFrame(raw_logs_by_season[season_id]))
-
-        return normalized_logs
+        return normalize_season_game_log_mapping(raw_logs_by_season)
 
     latest_season_id = str(career_stats.iloc[0]["SEASON_ID"])
     raw_game_log = data.get("season_game_log") or data.get("game_log") or []
-    return {latest_season_id: normalize_game_log(pd.DataFrame(raw_game_log))}
+    normalized_games = normalize_game_log(pd.DataFrame(raw_game_log))
+    return {latest_season_id: normalized_games} if normalized_games else {}
 
 
 def build_playoff_season_game_logs(playoff_career_stats: pd.DataFrame, data: dict):
     raw_logs_by_season = data.get("playoff_season_game_logs")
 
     if isinstance(raw_logs_by_season, dict) and raw_logs_by_season:
-        normalized_logs = {}
-
-        for season_id in sort_season_ids(raw_logs_by_season.keys()):
-            normalized_logs[str(season_id)] = normalize_game_log(pd.DataFrame(raw_logs_by_season[season_id]))
-
-        return normalized_logs
+        return normalize_season_game_log_mapping(raw_logs_by_season)
 
     if playoff_career_stats.empty:
         return {}
 
     latest_season_id = str(playoff_career_stats.iloc[0]["SEASON_ID"])
     raw_game_log = data.get("playoff_season_game_log") or data.get("playoff_game_log") or []
-    return {latest_season_id: normalize_game_log(pd.DataFrame(raw_game_log))}
+    normalized_games = normalize_game_log(pd.DataFrame(raw_game_log))
+    return {latest_season_id: normalized_games} if normalized_games else {}
 
 
 def build_playin_season_game_logs(data: dict):
     raw_logs_by_season = data.get("playin_season_game_logs")
 
     if isinstance(raw_logs_by_season, dict) and raw_logs_by_season:
-        normalized_logs = {}
-
-        for season_id in sort_season_ids(raw_logs_by_season.keys()):
-            normalized_logs[str(season_id)] = normalize_game_log(pd.DataFrame(raw_logs_by_season[season_id]))
-
-        return normalized_logs
+        return normalize_season_game_log_mapping(raw_logs_by_season)
 
     return {}
 
@@ -267,28 +364,25 @@ def build_player_summary_from_data(player_id: int, data: dict):
     if not playoff_career_stats.empty and "SEASON_ID" in playoff_career_stats:
         playoff_career_stats = playoff_career_stats.sort_values("SEASON_ID", ascending=False)
 
-    playoff_season_stats_by_season = (
+    playoff_season_game_logs = build_playoff_season_game_logs(playoff_career_stats, data)
+    playin_season_game_logs = build_playin_season_game_logs(data)
+    playoff_season_stats_by_season = add_missing_stats_from_game_logs(
         build_season_stats_by_season(playoff_career_stats)
         if not playoff_career_stats.empty
-        else {}
+        else {},
+        combine_season_game_logs(playin_season_game_logs, playoff_season_game_logs),
     )
-    playoff_latest_season_id = (
-        str(playoff_career_stats.iloc[0]["SEASON_ID"])
-        if not playoff_career_stats.empty
-        else None
-    )
+    playoff_latest_season_id = sort_season_ids(playoff_season_stats_by_season.keys())[0] if playoff_season_stats_by_season else None
     playoff_season_stats = (
         playoff_season_stats_by_season.get(playoff_latest_season_id)
         if playoff_latest_season_id
         else None
     )
-    playoff_season_game_logs = build_playoff_season_game_logs(playoff_career_stats, data)
     normalized_playoff_games = (
         playoff_season_game_logs.get(playoff_latest_season_id, [])
         if playoff_latest_season_id
         else []
     )
-    playin_season_game_logs = build_playin_season_game_logs(data)
     playin_latest_season_id = (
         str(sort_season_ids(playin_season_game_logs.keys())[0])
         if playin_season_game_logs
@@ -299,9 +393,14 @@ def build_player_summary_from_data(player_id: int, data: dict):
         if playin_latest_season_id
         else []
     )
+    normalized_postseason_games = (
+        combine_season_game_logs(playin_season_game_logs, playoff_season_game_logs).get(playoff_latest_season_id, [])
+        if playoff_latest_season_id
+        else []
+    )
 
     last_game = normalized_games[0] if normalized_games else None
-    playoff_last_game = normalized_playoff_games[0] if normalized_playoff_games else None
+    playoff_last_game = normalized_postseason_games[0] if normalized_postseason_games else None
     playin_last_game = normalized_playin_games[0] if normalized_playin_games else None
 
     return {
@@ -327,7 +426,7 @@ def build_player_summary_from_data(player_id: int, data: dict):
         "playoff_season_stats_by_season": playoff_season_stats_by_season,
         "available_playoff_stat_seasons": sort_season_ids(playoff_season_stats_by_season.keys()),
         "playoff_last_game": playoff_last_game,
-        "playoff_last_5_games": normalized_playoff_games[:5],
+        "playoff_last_5_games": normalized_postseason_games[:5],
         "playoff_season_game_log": normalized_playoff_games,
         "playoff_season_game_logs": playoff_season_game_logs,
         "available_playoff_game_log_seasons": sort_season_ids(playoff_season_game_logs.keys()),

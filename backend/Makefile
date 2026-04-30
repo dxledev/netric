@@ -8,8 +8,9 @@ PIP=$(VENV)/bin/pip
 UVICORN=$(VENV)/bin/uvicorn
 
 APP=main:app
-HOST=0.0.0.0
+HOST=127.0.0.1
 PORT=8000
+SERVICE=netric-backend.service
 
 # -------------------------
 # Setup virtual environment
@@ -29,14 +30,19 @@ install:
 # Run development server
 # -------------------------
 run:
-	nohup $(UVICORN) $(APP) --reload --host $(HOST) --port $(PORT) &
+	nohup $(UVICORN) $(APP) --host $(HOST) --port $(PORT) > uvicorn.log 2>&1 &
 
 # -------------------------
 # Reload server (restart dev server)
 # -------------------------
 reload:
-	-pkill -f "$(UVICORN) $(APP) --reload --host $(HOST) --port $(PORT)"
-	nohup $(UVICORN) $(APP) --reload --host $(HOST) --port $(PORT) &
+	@if systemctl list-unit-files "$(SERVICE)" 2>/dev/null | grep -q "^$(SERVICE)"; then \
+		sudo systemctl restart "$(SERVICE)"; \
+		sudo systemctl --no-pager --lines=20 status "$(SERVICE)"; \
+	else \
+		pkill -f "$(UVICORN) $(APP)" || true; \
+		nohup $(UVICORN) $(APP) --host $(HOST) --port $(PORT) > uvicorn.log 2>&1 & \
+	fi
 
 # -------------------------
 # Production run (no reload)

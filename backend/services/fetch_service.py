@@ -59,6 +59,29 @@ def get_active_season_ids(career_df):
     return sorted(set(active_seasons), reverse=True)
 
 
+def merge_unique_season_ids(*season_id_sets):
+    merged = []
+    seen = set()
+
+    for season_ids in season_id_sets:
+        for season_id in season_ids:
+            normalized = str(season_id).strip()
+            if not normalized or normalized in seen:
+                continue
+
+            merged.append(normalized)
+            seen.add(normalized)
+
+    return merged
+
+
+def get_playoff_log_season_ids(playoff_season_ids_to_store, regular_season_ids_to_store):
+    # The career playoff endpoint can lag behind player game logs during an
+    # active postseason, so probe the latest regular seasons for playoff logs.
+    recent_regular_seasons = regular_season_ids_to_store[:2]
+    return merge_unique_season_ids(playoff_season_ids_to_store, recent_regular_seasons)
+
+
 def fetch_game_logs_by_season(
     player_id: int,
     season_ids: list[str],
@@ -165,13 +188,17 @@ def fetch_player_by_name(name: str):
 
     playoff_season_ids = get_active_season_ids(playoff_df)
     playoff_season_ids_to_store = select_season_ids_for_storage(playoff_season_ids)
+    playoff_log_season_ids_to_store = get_playoff_log_season_ids(
+        playoff_season_ids_to_store,
+        season_ids_to_store,
+    )
     playoff_season_logs = fetch_game_logs_by_season(
         player_id,
-        playoff_season_ids_to_store,
+        playoff_log_season_ids_to_store,
         season_type_all_star="Playoffs",
     )
     latest_playoff_season = (
-        playoff_season_ids_to_store[0] if playoff_season_ids_to_store else None
+        playoff_log_season_ids_to_store[0] if playoff_log_season_ids_to_store else None
     )
     playin_season_logs = fetch_game_logs_by_season(
         player_id,
@@ -229,13 +256,17 @@ def fetch_player_data(player_id: int):
 
     playoff_season_ids = get_active_season_ids(playoff_career_df)
     playoff_season_ids_to_store = select_season_ids_for_storage(playoff_season_ids)
+    playoff_log_season_ids_to_store = get_playoff_log_season_ids(
+        playoff_season_ids_to_store,
+        season_ids_to_store,
+    )
     playoff_season_logs = fetch_game_logs_by_season(
         player_id,
-        playoff_season_ids_to_store,
+        playoff_log_season_ids_to_store,
         season_type_all_star="Playoffs",
     )
     latest_playoff_season = (
-        playoff_season_ids_to_store[0] if playoff_season_ids_to_store else None
+        playoff_log_season_ids_to_store[0] if playoff_log_season_ids_to_store else None
     )
     playin_season_logs = fetch_game_logs_by_season(
         player_id,
