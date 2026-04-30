@@ -11,6 +11,10 @@ function normalizeConfiguredBase(value) {
     return null
   }
 
+  if (trimmedValue.startsWith("/")) {
+    return trimmedValue.replace(/\/+$/, "") || "/"
+  }
+
   if (/^https?:\/\//i.test(trimmedValue)) {
     return trimmedValue.replace(/\/+$/, "")
   }
