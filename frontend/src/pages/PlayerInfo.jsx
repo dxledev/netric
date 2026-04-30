@@ -657,6 +657,14 @@ export default function PlayerInfo() {
     }, {})
   }
 
+  function getDidNotPlayMessage(seasonLabel, postseason = false) {
+    const playerName = data?.name || "This player"
+    const resolvedSeason = seasonLabel || "the selected season"
+    return postseason
+      ? `${playerName} did not play in the ${resolvedSeason} playoffs.`
+      : `${playerName} did not play in the ${resolvedSeason} season.`
+  }
+
   const tabs = [
     { id: "season", label: "Season" },
     { id: "games", label: "Game Logs" },
@@ -681,11 +689,17 @@ export default function PlayerInfo() {
     new Set([...availableGameLogSeasons, ...availablePlayInGameLogSeasons, ...availableStatSeasons])
   )
   const activeGameLogSeason = selectedGameLogSeason || seasonSelectorOptions[0] || defaultSeason
-  const activeSeason = availableStatSeasons.includes(activeGameLogSeason)
-    ? activeGameLogSeason
-    : availableStatSeasons[0] || defaultSeason || activeGameLogSeason
+  const activeSeason = activeGameLogSeason || availableStatSeasons[0] || defaultSeason
   const defaultSeasonStats = isPostSeason ? data.playoff_season_stats : data.season_stats
-  const activeSeasonStats = seasonStatsBySeason[activeSeason] || defaultSeasonStats || {}
+  const hasActiveSeasonStatsEntry = Object.prototype.hasOwnProperty.call(
+    seasonStatsBySeason,
+    activeGameLogSeason
+  )
+  const activeSeasonStats = hasActiveSeasonStatsEntry
+    ? seasonStatsBySeason[activeGameLogSeason]
+    : (!activeGameLogSeason || activeGameLogSeason === defaultSeason
+      ? (defaultSeasonStats || {})
+      : {})
   const defaultSeasonGameLog = isPostSeason ? data.playoff_season_game_log : data.season_game_log
   const defaultPlayInSeason = isPostSeason ? data.playin_season || "" : ""
   const defaultPlayInSeasonGameLog = isPostSeason ? data.playin_season_game_log : []
@@ -1085,10 +1099,8 @@ export default function PlayerInfo() {
                         ) : (
                           <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-slate-900/40 p-5 text-sm text-slate-400">
                             {isPostSeason
-                              ? (noPostSeasonData
-                                ? "This player does not have postseason game data yet."
-                                : `No postseason games are available for ${activeGameLogSeason || "this season"}.`)
-                              : "Recent game data is not available for this player yet."}
+                              ? getDidNotPlayMessage(activeGameLogSeason || activeSeason, true)
+                              : getDidNotPlayMessage(activeGameLogSeason || activeSeason, false)}
                           </div>
                         )}
 
@@ -1371,10 +1383,8 @@ export default function PlayerInfo() {
                     ) : (
                       <div className="mt-5 rounded-[1.25rem] border border-dashed border-white/12 bg-slate-900/35 p-6 text-sm text-slate-400">
                         {isPostSeason
-                          ? (noPostSeasonData
-                            ? "No playoff game logs are available for this player."
-                            : `No playoff game logs are available for ${activeGameLogSeason || "this season"}.`)
-                          : "Season game log data is not available for this player yet."}
+                          ? getDidNotPlayMessage(activeGameLogSeason || activeSeason, true)
+                          : getDidNotPlayMessage(activeGameLogSeason || activeSeason, false)}
                       </div>
                     )}
                   </div>
