@@ -1,5 +1,5 @@
 const PLAYER_SUMMARY_CACHE_TTL = 1000 * 60 * 30
-const PLAYER_SUMMARY_CACHE_VERSION = 5
+const PLAYER_SUMMARY_CACHE_VERSION = 6
 const summaryMemoryCache = new Map()
 
 export function getPlayerSummaryCacheKey(playerId) {

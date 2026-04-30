@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 11
+SUMMARY_VERSION = 12
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -228,25 +228,39 @@ def combine_season_game_logs(*season_game_log_sets):
     return combined_logs
 
 
+def get_game_value(game, *keys, default=None):
+    for key in keys:
+        value = game.get(key)
+        if value is not None and not pd.isna(value):
+            return value
+
+    return default
+
+
 def normalize_game_log(game_log: pd.DataFrame):
     if game_log.empty:
         return []
 
     prepared_log = game_log.copy()
+    if "GAME_DATE" not in prepared_log and "game_date" in prepared_log:
+        prepared_log["GAME_DATE"] = prepared_log["game_date"]
+    if "GAME_DATE" not in prepared_log and "date" in prepared_log:
+        prepared_log["GAME_DATE"] = prepared_log["date"]
+
     prepared_log["GAME_DATE"] = pd.to_datetime(prepared_log["GAME_DATE"], errors="coerce")
     prepared_log = prepared_log.sort_values("GAME_DATE", ascending=False)
 
     normalized_games = []
 
     for _, game in prepared_log.iterrows():
-        pts = to_int(game.get("PTS"))
-        ast = to_int(game.get("AST"))
-        reb = to_int(game.get("REB"))
-        fgm = to_int(game.get("FGM"))
-        fg3m = to_int(game.get("FG3M"))
-        fga = to_int(game.get("FGA"))
-        fta = to_int(game.get("FTA"))
-        ftm = to_int(game.get("FTM"))
+        pts = to_int(get_game_value(game, "PTS", "pts"))
+        ast = to_int(get_game_value(game, "AST", "ast"))
+        reb = to_int(get_game_value(game, "REB", "reb"))
+        fgm = to_int(get_game_value(game, "FGM", "fgm"))
+        fg3m = to_int(get_game_value(game, "FG3M", "three_pm"))
+        fga = to_int(get_game_value(game, "FGA", "fga"))
+        fta = to_int(get_game_value(game, "FTA", "fta"))
+        ftm = to_int(get_game_value(game, "FTM", "ftm"))
         efg_pct, ts_pct = build_efficiency_metrics(fgm, fg3m, fga, fta, pts)
 
         game_date = game.get("GAME_DATE")
@@ -255,29 +269,29 @@ def normalize_game_log(game_log: pd.DataFrame):
 
         normalized_games.append(
             {
-                "game_id": str(game.get("Game_ID") or game.get("GAME_ID") or ""),
-                "matchup": game.get("MATCHUP", ""),
+                "game_id": str(get_game_value(game, "Game_ID", "GAME_ID", "game_id", default="") or ""),
+                "matchup": get_game_value(game, "MATCHUP", "matchup", default="") or "",
                 "date": formatted_date,
                 "game_date": iso_date,
-                "result": game.get("WL", ""),
-                "min": str(game.get("MIN", "")),
+                "result": get_game_value(game, "WL", "result", default="") or "",
+                "min": str(get_game_value(game, "MIN", "min", default="") or ""),
                 "pts": pts,
                 "ast": ast,
                 "reb": reb,
-                "stl": to_int(game.get("STL")),
-                "blk": to_int(game.get("BLK")),
-                "tov": to_int(game.get("TOV")),
-                "pf": to_int(game.get("PF")),
-                "plus_minus": to_int(game.get("PLUS_MINUS")),
+                "stl": to_int(get_game_value(game, "STL", "stl")),
+                "blk": to_int(get_game_value(game, "BLK", "blk")),
+                "tov": to_int(get_game_value(game, "TOV", "tov")),
+                "pf": to_int(get_game_value(game, "PF", "pf")),
+                "plus_minus": to_int(get_game_value(game, "PLUS_MINUS", "plus_minus")),
                 "fgm": fgm,
                 "fga": fga,
-                "fg_pct": to_float(game.get("FG_PCT")),
+                "fg_pct": to_float(get_game_value(game, "FG_PCT", "fg_pct")),
                 "three_pm": fg3m,
-                "three_pa": to_int(game.get("FG3A")),
-                "fg3_pct": to_float(game.get("FG3_PCT")),
+                "three_pa": to_int(get_game_value(game, "FG3A", "three_pa")),
+                "fg3_pct": to_float(get_game_value(game, "FG3_PCT", "fg3_pct")),
                 "ftm": ftm,
                 "fta": fta,
-                "ft_pct": to_float(game.get("FT_PCT")),
+                "ft_pct": to_float(get_game_value(game, "FT_PCT", "ft_pct")),
                 "efg_pct": efg_pct,
                 "ts_pct": ts_pct,
             }
