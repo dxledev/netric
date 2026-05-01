@@ -456,30 +456,226 @@ export default function PlayerInfo() {
     return groupedRows
   }
 
-  function getPlayoffOpponentKey(game) {
-    const matchup = String(game?.matchup || "")
-    const opponentMatch = matchup.match(/\b(?:vs\.|@)\s*([A-Z]{2,3})\b/i)
-    return opponentMatch ? opponentMatch[1].toUpperCase() : ""
+  const nbaTeamAliases = [
+    { abbr: "ATL", conference: "Eastern", aliases: ["ATL", "Atlanta Hawks"] },
+    { abbr: "BKN", conference: "Eastern", aliases: ["BKN", "BRK", "Brooklyn Nets", "New Jersey Nets"] },
+    { abbr: "BOS", conference: "Eastern", aliases: ["BOS", "Boston Celtics"] },
+    { abbr: "CHA", conference: "Eastern", aliases: ["CHA", "CHH", "Charlotte Hornets", "Charlotte Bobcats"] },
+    { abbr: "CHI", conference: "Eastern", aliases: ["CHI", "Chicago Bulls"] },
+    { abbr: "CLE", conference: "Eastern", aliases: ["CLE", "Cleveland Cavaliers"] },
+    { abbr: "DAL", conference: "Western", aliases: ["DAL", "Dallas Mavericks"] },
+    { abbr: "DEN", conference: "Western", aliases: ["DEN", "Denver Nuggets"] },
+    { abbr: "DET", conference: "Eastern", aliases: ["DET", "Detroit Pistons"] },
+    { abbr: "GSW", conference: "Western", aliases: ["GSW", "Golden State Warriors"] },
+    { abbr: "HOU", conference: "Western", aliases: ["HOU", "Houston Rockets"] },
+    { abbr: "IND", conference: "Eastern", aliases: ["IND", "Indiana Pacers"] },
+    { abbr: "LAC", conference: "Western", aliases: ["LAC", "LA Clippers", "Los Angeles Clippers"] },
+    { abbr: "LAL", conference: "Western", aliases: ["LAL", "Los Angeles Lakers"] },
+    { abbr: "MEM", conference: "Western", aliases: ["MEM", "VAN", "Memphis Grizzlies", "Vancouver Grizzlies"] },
+    { abbr: "MIA", conference: "Eastern", aliases: ["MIA", "Miami Heat"] },
+    { abbr: "MIL", conference: "Eastern", aliases: ["MIL", "Milwaukee Bucks"] },
+    { abbr: "MIN", conference: "Western", aliases: ["MIN", "Minnesota Timberwolves"] },
+    { abbr: "NOP", conference: "Western", aliases: ["NOP", "NOH", "NOK", "New Orleans Pelicans", "New Orleans Hornets"] },
+    { abbr: "NYK", conference: "Eastern", aliases: ["NYK", "New York Knicks"] },
+    { abbr: "OKC", conference: "Western", aliases: ["OKC", "Oklahoma City Thunder", "Seattle SuperSonics", "Seattle Supersonics"] },
+    { abbr: "ORL", conference: "Eastern", aliases: ["ORL", "Orlando Magic"] },
+    { abbr: "PHI", conference: "Eastern", aliases: ["PHI", "Philadelphia 76ers", "Philadelphia Sixers"] },
+    { abbr: "PHX", conference: "Western", aliases: ["PHX", "Phoenix Suns"] },
+    { abbr: "POR", conference: "Western", aliases: ["POR", "Portland Trail Blazers"] },
+    { abbr: "SAC", conference: "Western", aliases: ["SAC", "Kansas City Kings", "Sacramento Kings"] },
+    { abbr: "SAS", conference: "Western", aliases: ["SAS", "SA", "San Antonio Spurs"] },
+    { abbr: "TOR", conference: "Eastern", aliases: ["TOR", "Toronto Raptors"] },
+    { abbr: "UTA", conference: "Western", aliases: ["UTA", "Utah Jazz"] },
+    { abbr: "WAS", conference: "Eastern", aliases: ["WAS", "WSB", "Washington Wizards", "Washington Bullets"] },
+  ]
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   }
 
-  function getPlayoffRoundLabel(roundIndex) {
+  function getTeamFromMatchupText(text) {
+    const normalizedText = String(text || "")
+
+    if (!normalizedText) {
+      return null
+    }
+
+    return nbaTeamAliases.find(team =>
+      team.aliases.some(alias => {
+        const escapedAlias = escapeRegExp(alias)
+        const aliasPattern = /^[A-Z]{2,3}$/.test(alias)
+          ? `\\b${escapedAlias}\\b`
+          : `(?:^|[^A-Za-z0-9])${escapedAlias}(?:$|[^A-Za-z0-9])`
+
+        return new RegExp(aliasPattern, "i").test(normalizedText)
+      })
+    ) || null
+  }
+
+  function getPlayoffMatchupTeams(game) {
+    const matchup = String(game?.matchup || "")
+    const matchupParts = matchup.split(/\s+(?:vs\.?|@)\s+/i)
+
+    if (matchupParts.length >= 2) {
+      return {
+        playerTeam: getTeamFromMatchupText(matchupParts[0]),
+        opponentTeam: getTeamFromMatchupText(matchupParts.slice(1).join(" ")),
+      }
+    }
+
+    return {
+      playerTeam: null,
+      opponentTeam: getTeamFromMatchupText(matchup),
+    }
+  }
+
+  function getPlayoffOpponentKey(game) {
+    return getPlayoffMatchupTeams(game).opponentTeam?.abbr || ""
+  }
+
+  function getPlayoffRoundIndex(game) {
+    const rawRound = game?.round || game?.round_name || game?.playoff_round || game?.series_round
+
+    if (rawRound == null || rawRound === "") {
+      return null
+    }
+
+    const normalizedRound = String(rawRound).toLowerCase()
+    const numericRound = Number.parseInt(normalizedRound, 10)
+
+    if (!Number.isNaN(numericRound)) {
+      return Math.max(0, numericRound - 1)
+    }
+
+    if (normalizedRound.includes("play-in") || normalizedRound.includes("play in")) {
+      return -1
+    }
+
+    if (normalizedRound.includes("final") && !normalizedRound.includes("conference")) {
+      return 3
+    }
+
+    if (normalizedRound.includes("conference final")) {
+      return 2
+    }
+
+    if (normalizedRound.includes("semi")) {
+      return 1
+    }
+
+    if (normalizedRound.includes("first") || normalizedRound.includes("round one") || normalizedRound.includes("round 1")) {
+      return 0
+    }
+
+    return null
+  }
+
+  function getPlayoffRoundLabel(roundIndex, conference) {
+    const conferencePrefix = conference ? `${conference} Conference ` : "Conference "
+
     if (roundIndex === 0) {
-      return "Round 1"
+      return `${conferencePrefix}Round One`
     }
 
     if (roundIndex === 1) {
-      return "Round 2"
+      return `${conferencePrefix}Semi-Finals`
     }
 
     if (roundIndex === 2) {
-      return "Conference Finals"
+      return `${conferencePrefix}Finals`
     }
 
     if (roundIndex === 3) {
       return "NBA Finals"
     }
 
-    return `Round ${roundIndex + 1}`
+    return `Playoff Round ${roundIndex + 1}`
+  }
+
+  function getPlayoffGameTimestamp(game) {
+    const parsedDate = parseGameDate(game)
+    return parsedDate ? parsedDate.getTime() : null
+  }
+
+  function comparePlayoffEntriesChronologically(firstEntry, secondEntry) {
+    const firstTimestamp = getPlayoffGameTimestamp(firstEntry.game)
+    const secondTimestamp = getPlayoffGameTimestamp(secondEntry.game)
+
+    if (firstTimestamp != null && secondTimestamp != null && firstTimestamp !== secondTimestamp) {
+      return firstTimestamp - secondTimestamp
+    }
+
+    if (firstTimestamp != null && secondTimestamp == null) {
+      return -1
+    }
+
+    if (firstTimestamp == null && secondTimestamp != null) {
+      return 1
+    }
+
+    return secondEntry.index - firstEntry.index
+  }
+
+  function shouldStartNextPlayoffSeries(currentSeries, nextEntry) {
+    if (!currentSeries) {
+      return true
+    }
+
+    const nextOpponentKey = getPlayoffOpponentKey(nextEntry.game)
+    const previousEntry = currentSeries.entries[currentSeries.entries.length - 1]
+    const previousTimestamp = getPlayoffGameTimestamp(previousEntry?.game)
+    const nextTimestamp = getPlayoffGameTimestamp(nextEntry.game)
+    const daysSincePreviousGame = previousTimestamp != null && nextTimestamp != null
+      ? (nextTimestamp - previousTimestamp) / (1000 * 60 * 60 * 24)
+      : 0
+
+    if (currentSeries.roundIndex != null && nextEntry.roundIndex != null) {
+      return currentSeries.roundIndex !== nextEntry.roundIndex
+    }
+
+    if (currentSeries.opponentKey && nextOpponentKey) {
+      return currentSeries.opponentKey !== nextOpponentKey
+    }
+
+    return currentSeries.entries.length >= 7 || daysSincePreviousGame > 5
+  }
+
+  function buildPlayoffSeriesBuckets(playoffGames) {
+    const chronologicalEntries = playoffGames
+      .map((game, index) => ({
+        game,
+        index,
+        roundIndex: getPlayoffRoundIndex(game),
+      }))
+      .sort(comparePlayoffEntriesChronologically)
+    const seriesBuckets = []
+
+    chronologicalEntries.forEach(entry => {
+      const opponentKey = getPlayoffOpponentKey(entry.game)
+      const shouldCreateSeries = shouldStartNextPlayoffSeries(seriesBuckets[seriesBuckets.length - 1], entry)
+
+      if (shouldCreateSeries) {
+        seriesBuckets.push({
+          opponentKey,
+          roundIndex: entry.roundIndex,
+          entries: [],
+        })
+      }
+
+      const activeSeries = seriesBuckets[seriesBuckets.length - 1]
+
+      if (!activeSeries.opponentKey && opponentKey) {
+        activeSeries.opponentKey = opponentKey
+      }
+
+      if (activeSeries.roundIndex == null && entry.roundIndex != null) {
+        activeSeries.roundIndex = entry.roundIndex
+      }
+
+      activeSeries.entries.push(entry)
+    })
+
+    return seriesBuckets
   }
 
   function getPostSeasonGameLogRows(playInGames, playoffGames) {
@@ -489,7 +685,7 @@ export default function PlayerInfo() {
       rows.push({
         type: "group",
         key: "playin-group",
-        label: "PlayIn",
+        label: "Play-In",
         count: playInGames.length,
       })
 
@@ -507,49 +703,25 @@ export default function PlayerInfo() {
       return rows
     }
 
-    const gamesInChronologicalOrder = [...playoffGames].reverse()
-    const opponentOrder = []
-
-    gamesInChronologicalOrder.forEach(game => {
-      const opponentKey = getPlayoffOpponentKey(game)
-
-      if (!opponentKey || opponentOrder.includes(opponentKey)) {
+    buildPlayoffSeriesBuckets(playoffGames).forEach((series, seriesIndex) => {
+      if (!series.entries || series.entries.length === 0) {
         return
       }
 
-      opponentOrder.push(opponentKey)
-    })
-
-    const roundBuckets = opponentOrder.length > 0 ? opponentOrder.map(() => []) : [[]]
-
-    playoffGames.forEach((game, index) => {
-      const opponentKey = getPlayoffOpponentKey(game)
-      const roundIndex = opponentOrder.length > 0 ? opponentOrder.indexOf(opponentKey) : 0
-      const safeRoundIndex = roundIndex >= 0 ? roundIndex : 0
-
-      if (!roundBuckets[safeRoundIndex]) {
-        roundBuckets[safeRoundIndex] = []
-      }
-
-      roundBuckets[safeRoundIndex].push({ game, index })
-    })
-
-    roundBuckets.forEach((entries, roundIndex) => {
-      if (!entries || entries.length === 0) {
-        return
-      }
+      const roundIndex = series.roundIndex ?? seriesIndex
+      const firstGameTeams = getPlayoffMatchupTeams(series.entries[0].game)
 
       rows.push({
         type: "group",
-        key: `playoff-round-${roundIndex}-group`,
-        label: getPlayoffRoundLabel(roundIndex),
-        count: entries.length,
+        key: `playoff-round-${roundIndex}-${seriesIndex}-group`,
+        label: getPlayoffRoundLabel(roundIndex, firstGameTeams.playerTeam?.conference),
+        count: series.entries.length,
       })
 
-      entries.forEach(({ game, index }) => {
+      series.entries.forEach(({ game, index }) => {
         rows.push({
           type: "game",
-          key: `playoff-round-${roundIndex}-${getGameLogKey(game, index)}-row`,
+          key: `playoff-round-${roundIndex}-${seriesIndex}-${getGameLogKey(game, index)}-row`,
           game,
           index,
         })
@@ -669,7 +841,15 @@ export default function PlayerInfo() {
 
   function getSeasonStartYear(seasonId) {
     const startYear = Number.parseInt(String(seasonId).split("-")[0], 10)
-    return Number.isNaN(startYear) ? null : startYear
+    if (Number.isNaN(startYear)) {
+      return null
+    }
+
+    if (startYear < 100) {
+      return startYear >= 47 ? 1900 + startYear : 2000 + startYear
+    }
+
+    return startYear
   }
 
   function compareSeasonIdsDescending(firstSeasonId, secondSeasonId) {
