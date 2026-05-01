@@ -667,6 +667,38 @@ export default function PlayerInfo() {
     { id: "advanced", label: "Advanced" },
   ]
 
+  function getSeasonStartYear(seasonId) {
+    const startYear = Number.parseInt(String(seasonId).split("-")[0], 10)
+    return Number.isNaN(startYear) ? null : startYear
+  }
+
+  function compareSeasonIdsDescending(firstSeasonId, secondSeasonId) {
+    const firstStartYear = getSeasonStartYear(firstSeasonId)
+    const secondStartYear = getSeasonStartYear(secondSeasonId)
+
+    if (firstStartYear !== null && secondStartYear !== null) {
+      return secondStartYear - firstStartYear
+    }
+
+    if (firstStartYear !== null) {
+      return -1
+    }
+
+    if (secondStartYear !== null) {
+      return 1
+    }
+
+    return String(secondSeasonId).localeCompare(String(firstSeasonId))
+  }
+
+  function getSortedSeasonOptions(seasonIds) {
+    const normalizedSeasonIds = seasonIds
+      .map(seasonId => String(seasonId ?? "").trim())
+      .filter(Boolean)
+
+    return Array.from(new Set(normalizedSeasonIds)).sort(compareSeasonIdsDescending)
+  }
+
   const defaultSeason = isPostSeason ? data.playoff_season || data.playin_season || "" : data.season || ""
   const availableGameLogSeasons = isPostSeason
     ? (Array.isArray(data.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : [])
@@ -680,9 +712,11 @@ export default function PlayerInfo() {
   const availableStatSeasons = isPostSeason
     ? (Array.isArray(data.available_playoff_stat_seasons) ? data.available_playoff_stat_seasons : [])
     : (Array.isArray(data.available_stat_seasons) ? data.available_stat_seasons : [])
-  const seasonSelectorOptions = Array.from(
-    new Set([...availableGameLogSeasons, ...availablePlayInGameLogSeasons, ...availableStatSeasons])
-  )
+  const seasonSelectorOptions = getSortedSeasonOptions([
+    ...availableGameLogSeasons,
+    ...availablePlayInGameLogSeasons,
+    ...availableStatSeasons,
+  ])
   const activeGameLogSeason = selectedGameLogSeason || seasonSelectorOptions[0] || defaultSeason
   const activeSeason = activeGameLogSeason || availableStatSeasons[0] || defaultSeason
   const defaultSeasonStats = isPostSeason ? data.playoff_season_stats : data.season_stats
@@ -737,15 +771,15 @@ export default function PlayerInfo() {
     { key: "min", label: "MIN" },
     { key: "plus_minus", label: "+/-" },
   ]
-  const gameHighSeasonOptions = Array.from(
-    new Set([
-      "all-time",
+  const gameHighSeasonOptions = [
+    "all-time",
+    ...getSortedSeasonOptions([
       ...availableGameLogSeasons,
       ...availablePlayInGameLogSeasons,
       ...Object.keys(seasonGameLogs || {}),
       ...Object.keys(playInSeasonGameLogs || {}),
-    ])
-  )
+    ]),
+  ]
   const activeGameHighSeason = gameHighSeasonOptions.includes(selectedGameHighSeason)
     ? selectedGameHighSeason
     : "all-time"
