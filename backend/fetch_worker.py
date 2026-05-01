@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from database import fetch_queue_collection, player_cache_collection
 from nba import SUMMARY_VERSION, build_player_summary_from_data
-from services.fetch_service import fetch_player_data
+from services.fetch_service import fetch_player_data, merge_cached_player_data
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
@@ -35,6 +35,8 @@ def find_next_job():
 
 
 def store_player_data(player_id, data):
+    cached_player = player_cache.find_one({"player_id": player_id}, {"data": 1})
+    data = merge_cached_player_data((cached_player or {}).get("data"), data)
     summary = build_player_summary_from_data(player_id, data)
 
     player_cache.update_one(

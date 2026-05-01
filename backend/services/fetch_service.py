@@ -187,6 +187,44 @@ def get_latest_cached_game_date(cached_player):
 
     return latest_date
 
+
+SEASON_LOG_FIELDS = (
+    "season_game_logs",
+    "playoff_season_game_logs",
+    "playin_season_game_logs",
+)
+
+
+def merge_season_log_maps(existing_logs, fetched_logs):
+    merged = {}
+
+    if isinstance(existing_logs, dict):
+        merged.update(existing_logs)
+
+    if isinstance(fetched_logs, dict):
+        merged.update(fetched_logs)
+
+    return merged
+
+
+def merge_cached_player_data(existing_data, fetched_data):
+    if not isinstance(existing_data, dict):
+        return fetched_data
+
+    merged_data = {
+        **existing_data,
+        **fetched_data,
+    }
+
+    for field in SEASON_LOG_FIELDS:
+        merged_data[field] = merge_season_log_maps(
+            existing_data.get(field),
+            fetched_data.get(field),
+        )
+
+    return merged_data
+
+
 def fetch_player_by_name(name: str):
     results = players.find_players_by_full_name(name)
     if not results:
@@ -244,6 +282,12 @@ def fetch_player_by_name(name: str):
         "playin_season_game_log": playin_season_logs.get(latest_playin_season, []),
         "playin_season_game_logs": playin_season_logs,
     }
+
+    cached_player = player_cache.find_one({"player_id": player_id}, {"data": 1})
+    summary_data = merge_cached_player_data(
+        (cached_player or {}).get("data"),
+        summary_data,
+    )
 
     player_cache.update_one(
         {"player_id": player_id},
