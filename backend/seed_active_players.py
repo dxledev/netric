@@ -1,6 +1,6 @@
 import time
 from database import fetch_queue_collection, player_cache_collection
-from services.cache_status import has_complete_cached_season_logs
+from services.cache_status import has_all_cached_stat_season_logs
 from services.player_pool import get_tracked_players
 
 fetch_queue = fetch_queue_collection
@@ -31,7 +31,7 @@ def seed_active_players():
             },
         )
 
-        if cached_player and has_complete_cached_season_logs(cached_player):
+        if cached_player and has_all_cached_stat_season_logs(cached_player):
             skipped += 1
             continue
 
@@ -43,6 +43,7 @@ def seed_active_players():
             {
                 "player_id": player_id,
                 "name": name,
+                "repair_missing_logs": bool(cached_player),
             }
         )
 

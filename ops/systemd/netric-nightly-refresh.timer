@@ -1,8 +1,10 @@
 [Unit]
-Description=Run Netric nightly NBA refresh at 8am
+Description=Run Netric NBA cache refresh checks
 
 [Timer]
 OnCalendar=*-*-* 08:00:00
+OnBootSec=5m
+OnUnitActiveSec=30m
 Persistent=true
 Unit=netric-nightly-refresh.service
 

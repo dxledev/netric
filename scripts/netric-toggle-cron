@@ -12,8 +12,8 @@ usage() {
   cat <<'EOF'
 Usage: netric-toggle-cron <on|off|status|run-now>
 
-  on      Install, enable, and start the daily 8am timer
-  off     Disable and stop the nightly timer
+  on      Install, enable, and start recurring cache checks
+  off     Disable and stop recurring cache checks
   status  Show timer and service status
   run-now Run the refresh service immediately
 EOF

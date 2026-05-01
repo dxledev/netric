@@ -1,7 +1,10 @@
 from datetime import UTC, datetime
 
 from database import fetch_queue_collection, player_cache_collection
-from services.cache_status import has_complete_cached_season_logs
+from services.cache_status import (
+    has_all_cached_stat_season_logs,
+    has_complete_cached_season_logs,
+)
 from services.fetch_service import (
     get_latest_cached_game_date,
     get_latest_remote_game_date,
@@ -12,13 +15,18 @@ player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
 
 
-def build_refresh_job(player_id, name):
-    return {
+def build_refresh_job(player_id, name, repair_missing_logs=False):
+    job = {
         "player_id": player_id,
         "name": name,
         "refresh": True,
         "queued_at": datetime.now(UTC),
     }
+
+    if repair_missing_logs:
+        job["repair_missing_logs"] = True
+
+    return job
 
 
 def is_already_queued(player_id):
@@ -66,6 +74,9 @@ def should_refresh_player(player_id):
     if not has_complete_cached_season_logs(cached_player):
         return True
 
+    if not has_all_cached_stat_season_logs(cached_player):
+        return True
+
     cached_latest_game = get_latest_cached_game_date(cached_player)
 
     if cached_latest_game is None:
@@ -93,8 +104,14 @@ def refresh_all_players():
     for player in tracked_players:
         player_id = player["id"]
         name = player["full_name"]
+        cached_player = find_cached_player(player_id)
 
         if is_already_queued(player_id):
+            if cached_player and not has_all_cached_stat_season_logs(cached_player):
+                fetch_queue.update_one(
+                    {"player_id": player_id},
+                    {"$set": {"repair_missing_logs": True, "refresh": True}},
+                )
             skipped_count += 1
             continue
 
@@ -110,7 +127,18 @@ def refresh_all_players():
             forced_queue_count += 1
             continue
 
-        fetch_queue.insert_one(build_refresh_job(player_id, name))
+        repair_missing_logs = (
+            cached_player is not None
+            and not has_all_cached_stat_season_logs(cached_player)
+        )
+
+        fetch_queue.insert_one(
+            build_refresh_job(
+                player_id,
+                name,
+                repair_missing_logs=repair_missing_logs,
+            )
+        )
         queued_count += 1
 
     print(

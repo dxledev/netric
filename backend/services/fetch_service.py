@@ -12,6 +12,9 @@ player_cache = player_cache_collection
 NBA_API_TIMEOUT_SECONDS = int(os.getenv("NBA_API_TIMEOUT_SECONDS", "60"))
 NBA_API_RETRY_ATTEMPTS = int(os.getenv("NBA_API_RETRY_ATTEMPTS", "3"))
 NBA_API_RETRY_DELAY_SECONDS = float(os.getenv("NBA_API_RETRY_DELAY_SECONDS", "2"))
+FETCH_REPAIR_MAX_SEASONS_PER_JOB = int(
+    os.getenv("FETCH_REPAIR_MAX_SEASONS_PER_JOB", "8")
+)
 
 
 def utc_now():
@@ -85,6 +88,45 @@ def fetch_game_logs_by_season(
             raise
 
     return season_logs
+
+
+def fetch_missing_game_logs_by_season(player_id: int, missing_log_season_ids: dict):
+    season_type_by_field = {
+        "season_game_logs": "Regular Season",
+        "playoff_season_game_logs": "Playoffs",
+        "playin_season_game_logs": "PlayIn",
+    }
+    fetched_data = {}
+    failures = []
+    attempted_count = 0
+    has_more = False
+
+    for field, season_type in season_type_by_field.items():
+        fetched_data[field] = {}
+
+        for season_id in missing_log_season_ids.get(field, []):
+            if attempted_count >= FETCH_REPAIR_MAX_SEASONS_PER_JOB:
+                has_more = True
+                continue
+
+            attempted_count += 1
+
+            try:
+                fetched_data[field][season_id] = fetch_game_logs_by_season(
+                    player_id,
+                    [season_id],
+                    season_type_all_star=season_type,
+                ).get(season_id, [])
+            except Exception as exc:
+                failures.append(
+                    {
+                        "field": field,
+                        "season_id": season_id,
+                        "error": str(exc),
+                    }
+                )
+
+    return fetched_data, failures, has_more
 
 
 def get_player_name(player_id: int):
