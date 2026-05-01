@@ -49,3 +49,26 @@ def select_season_ids_for_storage(season_ids):
         return normalized
 
     return normalized[:max_seasons]
+
+
+def merge_unique_season_ids(*season_id_sets):
+    merged = []
+    seen = set()
+
+    for season_ids in season_id_sets:
+        for season_id in season_ids:
+            normalized = str(season_id).strip()
+            if not normalized or normalized in seen:
+                continue
+
+            merged.append(normalized)
+            seen.add(normalized)
+
+    return merged
+
+
+def get_playoff_log_season_ids(playoff_season_ids_to_store, regular_season_ids_to_store):
+    # The career playoff endpoint can lag behind player game logs during an
+    # active postseason, so probe the latest regular seasons for playoff logs.
+    recent_regular_seasons = regular_season_ids_to_store[:2]
+    return merge_unique_season_ids(playoff_season_ids_to_store, recent_regular_seasons)

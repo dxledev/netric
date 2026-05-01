@@ -6,7 +6,7 @@ from nba_api.stats.endpoints import playercareerstats, playergamelog
 from nba_api.stats.static import players
 
 from database import player_cache_collection
-from services.season_policy import select_season_ids_for_storage
+from services.season_policy import get_playoff_log_season_ids, select_season_ids_for_storage
 
 player_cache = player_cache_collection
 NBA_API_TIMEOUT_SECONDS = int(os.getenv("NBA_API_TIMEOUT_SECONDS", "60"))
@@ -59,29 +59,6 @@ def get_active_season_ids(career_df):
     return sorted(set(active_seasons), reverse=True)
 
 
-def merge_unique_season_ids(*season_id_sets):
-    merged = []
-    seen = set()
-
-    for season_ids in season_id_sets:
-        for season_id in season_ids:
-            normalized = str(season_id).strip()
-            if not normalized or normalized in seen:
-                continue
-
-            merged.append(normalized)
-            seen.add(normalized)
-
-    return merged
-
-
-def get_playoff_log_season_ids(playoff_season_ids_to_store, regular_season_ids_to_store):
-    # The career playoff endpoint can lag behind player game logs during an
-    # active postseason, so probe the latest regular seasons for playoff logs.
-    recent_regular_seasons = regular_season_ids_to_store[:2]
-    return merge_unique_season_ids(playoff_season_ids_to_store, recent_regular_seasons)
-
-
 def fetch_game_logs_by_season(
     player_id: int,
     season_ids: list[str],
@@ -118,13 +95,20 @@ def get_player_name(player_id: int):
     return player_info["full_name"]
 
 
-def get_latest_remote_game_date(player_id: int):
-    gamelog = run_with_retries(
-        lambda: playergamelog.PlayerGameLog(
-            player_id=player_id,
-            timeout=NBA_API_TIMEOUT_SECONDS,
+def get_latest_remote_game_date_for_type(player_id: int, season_type_all_star: str):
+    try:
+        gamelog = run_with_retries(
+            lambda: playergamelog.PlayerGameLog(
+                player_id=player_id,
+                season_type_all_star=season_type_all_star,
+                timeout=NBA_API_TIMEOUT_SECONDS,
+            )
         )
-    )
+    except KeyError as error:
+        if str(error).strip("'") == "resultSet":
+            return None
+        raise
+
     game_df = gamelog.get_data_frames()[0]
 
     if game_df.empty:
@@ -142,18 +126,56 @@ def get_latest_remote_game_date(player_id: int):
     return latest_date
 
 
+def get_latest_remote_game_date(player_id: int):
+    latest_dates = [
+        get_latest_remote_game_date_for_type(player_id, season_type)
+        for season_type in ("Regular Season", "PlayIn", "Playoffs")
+    ]
+    available_dates = [game_date for game_date in latest_dates if game_date is not None]
+    return max(available_dates) if available_dates else None
+
+
+def iter_cached_game_logs(data):
+    log_fields = (
+        "game_log",
+        "season_game_log",
+        "playoff_game_log",
+        "playoff_season_game_log",
+        "playin_game_log",
+        "playin_season_game_log",
+    )
+    mapping_fields = (
+        "season_game_logs",
+        "playoff_season_game_logs",
+        "playin_season_game_logs",
+    )
+
+    for field in log_fields:
+        games = data.get(field)
+        if isinstance(games, list):
+            yield from games
+
+    for field in mapping_fields:
+        logs_by_season = data.get(field)
+        if not isinstance(logs_by_season, dict):
+            continue
+
+        for games in logs_by_season.values():
+            if isinstance(games, list):
+                yield from games
+
+
 def get_latest_cached_game_date(cached_player):
     if not cached_player:
         return None
 
     data = cached_player.get("data", {})
-    game_log = data.get("game_log", [])
-    if not game_log:
-        return None
-
     latest_date = None
 
-    for game in game_log:
+    for game in iter_cached_game_logs(data):
+        if not isinstance(game, dict):
+            continue
+
         parsed_date = parse_game_date(game.get("GAME_DATE"))
         if parsed_date is None:
             parsed_date = parse_game_date(game.get("game_date"))

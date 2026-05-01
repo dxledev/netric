@@ -1,4 +1,4 @@
-from services.season_policy import select_season_ids_for_storage
+from services.season_policy import get_playoff_log_season_ids, select_season_ids_for_storage
 
 
 def get_active_cached_season_ids(cached_player):
@@ -83,7 +83,10 @@ def has_complete_cached_season_logs(cached_player):
     )
 
     playoff_active_season_ids = get_active_cached_playoff_season_ids(cached_player)
-    expected_playoff_season_ids = select_season_ids_for_storage(playoff_active_season_ids)
+    expected_playoff_season_ids = get_playoff_log_season_ids(
+        select_season_ids_for_storage(playoff_active_season_ids),
+        expected_season_ids,
+    )
     playoff_complete = has_complete_log_set(
         expected_playoff_season_ids,
         data.get("playoff_season_game_logs"),
