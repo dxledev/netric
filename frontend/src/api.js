@@ -38,7 +38,7 @@ function resolveDefaultApiBase() {
     return DEFAULT_API_BASE
   }
 
-  return `${protocol}//${hostname}:8000`
+  return "/api"
 }
 
 export const API_BASE =
