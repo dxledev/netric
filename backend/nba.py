@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 12
+SUMMARY_VERSION = 13
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -75,8 +75,43 @@ def build_efficiency_metrics(fgm, fg3m, fga, fta, pts):
     return round(efg, 3), round(ts, 3)
 
 
+def get_season_start_year(season_id):
+    try:
+        start_year = int(str(season_id).split("-")[0])
+    except (TypeError, ValueError):
+        return None
+
+    if start_year < 100:
+        return 1900 + start_year if start_year >= 47 else 2000 + start_year
+
+    return start_year
+
+
 def sort_season_ids(season_ids):
-    return sorted(season_ids, reverse=True)
+    return sorted(
+        season_ids,
+        key=lambda season_id: (
+            get_season_start_year(season_id) is not None,
+            get_season_start_year(season_id) or -1,
+            str(season_id),
+        ),
+        reverse=True,
+    )
+
+
+def sort_season_dataframe(season_stats: pd.DataFrame):
+    if season_stats.empty or "SEASON_ID" not in season_stats:
+        return season_stats
+
+    sorted_season_stats = season_stats.copy()
+    sorted_season_stats["_season_start_year"] = (
+        sorted_season_stats["SEASON_ID"].map(get_season_start_year).fillna(-1)
+    )
+    return (
+        sorted_season_stats
+        .sort_values(["_season_start_year", "SEASON_ID"], ascending=[False, False])
+        .drop(columns=["_season_start_year"])
+    )
 
 
 def build_season_stats(row):
@@ -422,7 +457,7 @@ def build_player_summary_from_data(player_id: int, data: dict):
         raise HTTPException(status_code=404, detail="Career stats unavailable")
 
     career_stats = career_stats[career_stats["GP"] > 0]
-    career_stats = career_stats.sort_values("SEASON_ID", ascending=False)
+    career_stats = sort_season_dataframe(career_stats)
 
     if career_stats.empty:
         raise HTTPException(status_code=404, detail="Season stats unavailable")
@@ -441,7 +476,7 @@ def build_player_summary_from_data(player_id: int, data: dict):
     if not playoff_career_stats.empty and "GP" in playoff_career_stats:
         playoff_career_stats = playoff_career_stats[playoff_career_stats["GP"] > 0]
     if not playoff_career_stats.empty and "SEASON_ID" in playoff_career_stats:
-        playoff_career_stats = playoff_career_stats.sort_values("SEASON_ID", ascending=False)
+        playoff_career_stats = sort_season_dataframe(playoff_career_stats)
 
     playoff_season_game_logs = build_playoff_season_game_logs(playoff_career_stats, data)
     playin_season_game_logs = build_playin_season_game_logs(data)
