@@ -62,11 +62,13 @@ app.add_middleware(
 from nba import search_player_stats, search_player_matches, build_player_summary
 
 @app.get("/search/players/{name}")
+@app.get("/api/search/players/{name}")
 def search_player(name: str):
     return search_player_stats(name)
 
 
 @app.get("/search/players/matches/{name}")
+@app.get("/api/search/players/matches/{name}")
 def search_player_name_matches(name: str, limit: int = 25):
     return search_player_matches(name, limit)
 
@@ -75,10 +77,12 @@ def search_player_name_matches(name: str, limit: int = 25):
 # ---------------------------
 
 @app.post("/register")
+@app.post("/api/register")
 def register(data: AuthRequest):
     return register_user(data)
 
 @app.post("/login")
+@app.post("/api/login")
 def login(data: AuthRequest):
     return login_user(data)
 
@@ -92,14 +96,17 @@ def change_password(data: ChangePasswordRequest, authorization: str = Header(Non
 # ---------------------------
 
 @app.get("/favorites")
+@app.get("/api/favorites")
 def favorites(authorization: str = Header(None)):
     return get_user_favorites(authorization)
 
 @app.post("/favorite/players")
+@app.post("/api/favorite/players")
 def favorite_player(data: dict, authorization: str = Header(None)):
     return add_favorite_player(data, authorization)
 
 @app.delete("/favorites/player/{player_id}")
+@app.delete("/api/favorites/player/{player_id}")
 def delete_favorite_player(player_id: int, authorization: str = Header(None)):
     return remove_favorite_player(player_id, authorization)
 
@@ -108,6 +115,7 @@ def delete_favorite_player(player_id: int, authorization: str = Header(None)):
 # ---------------------------
 
 @app.get("/player/{player_id}/summary")
+@app.get("/api/player/{player_id}/summary")
 def get_player_summary(player_id: int):
     cached = player_cache.find_one({"player_id": player_id})
 
