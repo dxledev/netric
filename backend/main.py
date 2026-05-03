@@ -14,6 +14,7 @@ from auth import (
     add_favorite_player,
     remove_favorite_player,
     get_player_comments,
+    get_trending_player_comments,
     add_player_comment,
     delete_player_comment
 )
@@ -128,6 +129,12 @@ def get_player_summary(player_id: int):
 @app.get("/api/player/{player_id}/comments")
 def player_comments(player_id: int, authorization: str = Header(None)):
     return get_player_comments(player_id, authorization)
+
+
+@app.get("/player/comments/trending")
+@app.get("/api/player/comments/trending")
+def trending_player_comments(hours: int = 24, limit: int = 6):
+    return get_trending_player_comments(hours, limit)
 
 
 @app.post("/player/{player_id}/comments")

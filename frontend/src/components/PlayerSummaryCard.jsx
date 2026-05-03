@@ -86,6 +86,8 @@ export default function PlayerSummaryCard({
   isDragged = false,
   isDragTarget = false,
   canMoveToTop = true,
+  isDraggable = true,
+  showFavoriteActions = true,
 }) {
   const navigate = useNavigate()
   const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null
@@ -293,7 +295,7 @@ export default function PlayerSummaryCard({
   return (
     <div
       ref={cardRef}
-      draggable
+      draggable={isDraggable}
       onMouseLeave={() => setContextMenu(null)}
       onClick={() => {
         if (shouldSuppressClickRef.current) {
@@ -305,6 +307,10 @@ export default function PlayerSummaryCard({
         navigate(`/player/${player.id}`)
       }}
       onContextMenu={event => {
+        if (!showFavoriteActions) {
+          return
+        }
+
         event.preventDefault()
         event.stopPropagation()
         const cardBounds = cardRef.current?.getBoundingClientRect()
@@ -326,6 +332,11 @@ export default function PlayerSummaryCard({
         })
       }}
       onDragStart={event => {
+        if (!isDraggable) {
+          event.preventDefault()
+          return
+        }
+
         shouldSuppressClickRef.current = true
         setContextMenu(null)
         event.dataTransfer.effectAllowed = "move"
@@ -336,6 +347,10 @@ export default function PlayerSummaryCard({
         }
       }}
       onDragOver={event => {
+        if (!isDraggable) {
+          return
+        }
+
         event.preventDefault()
         event.dataTransfer.dropEffect = "move"
 
@@ -344,6 +359,10 @@ export default function PlayerSummaryCard({
         }
       }}
       onDrop={event => {
+        if (!isDraggable) {
+          return
+        }
+
         event.preventDefault()
 
         if (onDrop) {
@@ -351,6 +370,10 @@ export default function PlayerSummaryCard({
         }
       }}
       onDragEnd={() => {
+        if (!isDraggable) {
+          return
+        }
+
         window.setTimeout(() => {
           shouldSuppressClickRef.current = false
         }, 0)
@@ -359,13 +382,15 @@ export default function PlayerSummaryCard({
           onDragEnd()
         }
       }}
-      className={`relative cursor-grab overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-slate-900/75 ${
+      className={`relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-slate-900/75 ${
+        isDraggable ? "cursor-grab" : "cursor-pointer"
+      } ${
         isDragged ? "scale-[0.985] opacity-70" : ""
       } ${isDragTarget ? "border-blue-300/40 shadow-xl shadow-blue-500/10" : ""}`}
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
 
-      {contextMenu && (
+      {showFavoriteActions && contextMenu && (
         <div
           className="absolute z-50 min-w-56 rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-black/35 backdrop-blur-xl"
           style={{ left: contextMenu.left, top: contextMenu.top }}

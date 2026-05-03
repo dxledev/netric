@@ -685,16 +685,6 @@ export default function Home() {
                   >
                     Profile
                   </button>
-
-                  <button
-                    onClick={() => {
-                      window.localStorage.removeItem("token")
-                      navigate("/login")
-                    }}
-                    className="rounded-xl border border-white/15 bg-red-500/15 px-5 py-3 text-sm font-medium text-red-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-red-500/25"
-                  >
-                    Logout
-                  </button>
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import axios from "axios"
 import PlayerCard from "../components/PlayerCard"
+import PlayerSummaryCard from "../components/PlayerSummaryCard"
 import ReturnHome from "../components/ReturnHome"
 import { API_BASE } from "../api"
 import { writePlayerSummaryCache } from "../utils/playerSummaryCache"
@@ -20,6 +21,29 @@ export default function PlayerSearch() {
   const [category, setCategory] = useState("players")
   const [matches, setMatches] = useState([])
   const [loadingMatches, setLoadingMatches] = useState(false)
+  const [trendingPlayers, setTrendingPlayers] = useState([])
+  const [loadingTrending, setLoadingTrending] = useState(true)
+  const [trendingError, setTrendingError] = useState(null)
+  const [hasSuccessfulSearch, setHasSuccessfulSearch] = useState(false)
+
+  function normalizeTrendingPlayers(data) {
+    const players = Array.isArray(data?.players)
+      ? data.players
+      : Array.isArray(data?.trending_players)
+        ? data.trending_players
+        : Array.isArray(data)
+          ? data
+          : []
+
+    return players
+      .map(player => ({
+        id: Number(player.id ?? player.player_id),
+        name: player.name,
+        commentCount: Number(player.comment_count ?? player.comments_count ?? player.comments ?? 0),
+      }))
+      .filter(player => Number.isFinite(player.id) && player.name)
+      .slice(0, 6)
+  }
 
   const searchPlayer = async inputValue => {
     const normalizedQuery = normalizeSearchInput(inputValue ?? name)
@@ -40,6 +64,7 @@ export default function PlayerSearch() {
           const res = await axios.get(`${API_BASE}/search/${category}/${encodedName}`)
           setStats(res.data)
           setMatches([])
+          setHasSuccessfulSearch(true)
           if (category === "players" && res.data?.player_id) {
             writePlayerSummaryCache(res.data.player_id, res.data)
           }
@@ -60,6 +85,37 @@ export default function PlayerSearch() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function fetchTrendingPlayers() {
+      try {
+        setLoadingTrending(true)
+        setTrendingError(null)
+        const res = await axios.get(`${API_BASE}/player/comments/trending?hours=24&limit=6`)
+
+        if (!isCancelled) {
+          setTrendingPlayers(normalizeTrendingPlayers(res.data))
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setTrendingPlayers([])
+          setTrendingError("Unable to load trending players right now.")
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingTrending(false)
+        }
+      }
+    }
+
+    fetchTrendingPlayers()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let isCancelled = false
@@ -108,7 +164,7 @@ export default function PlayerSearch() {
           <ReturnHome className="border border-white/10 bg-white/10 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15" />
         </div>
 
-        <div className="mx-auto flex min-h-[calc(100vh-8rem)] items-center justify-center">
+        <div className="mx-auto flex justify-center">
           <div className="w-full max-w-5xl rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl animate-fade-up sm:p-8 lg:p-10">
             <div className="flex flex-col gap-8">
               <div className="max-w-2xl">
@@ -224,6 +280,53 @@ export default function PlayerSearch() {
             </div>
           </div>
         </div>
+
+        {!hasSuccessfulSearch && (
+          <section className="mx-auto mt-[100px] max-w-5xl animate-content-in">
+            <div className="mb-5">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.24em] text-emerald-200">
+                  Trending
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                  Most discussed players
+                </h2>
+              </div>
+            </div>
+
+            {loadingTrending ? (
+              <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/50 p-6 shadow-lg shadow-black/20">
+                <div className="mb-4 h-10 w-10 rounded-full border-4 border-emerald-400/30 border-t-emerald-400 animate-spin" />
+                <p className="text-sm text-slate-300">Loading trending players...</p>
+              </div>
+            ) : trendingError ? (
+              <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {trendingError}
+              </div>
+            ) : trendingPlayers.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-slate-900/40 p-8 text-center text-slate-300">
+                <h3 className="text-xl font-semibold text-white">No trending players yet</h3>
+                <p className="mt-2 text-sm">Player comments from the last 24 hours will appear here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-5">
+                {trendingPlayers.map(player => (
+                  <div
+                    key={player.id}
+                    className="transform-gpu transition-all duration-300 ease-out animate-content-in"
+                  >
+                    <PlayerSummaryCard
+                      player={player}
+                      isDraggable={false}
+                      showFavoriteActions={false}
+                      canMoveToTop={false}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

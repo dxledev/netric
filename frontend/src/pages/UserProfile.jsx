@@ -314,6 +314,11 @@ export default function UserProfile() {
     setProfileMessage(null)
   }
 
+  function handleLogout() {
+    window.localStorage.removeItem("token")
+    navigate("/login")
+  }
+
   async function handleChangePassword(event) {
     event.preventDefault()
 
@@ -407,6 +412,12 @@ export default function UserProfile() {
 
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <button
+                onClick={() => navigate("/search")}
+                className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-100"
+              >
+                Search Players
+              </button>
+              <button
                 onClick={() => {
                   setDraftUsername(username)
                   setDraftImage(profileImage || null)
@@ -418,10 +429,10 @@ export default function UserProfile() {
                 Edit Profile
               </button>
               <button
-                onClick={() => navigate("/search")}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-100"
+                onClick={handleLogout}
+                className="rounded-xl border border-white/15 bg-red-500/15 px-5 py-3 text-sm font-medium text-red-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-red-500/25"
               >
-                Search Players
+                Logout
               </button>
             </div>
           </div>

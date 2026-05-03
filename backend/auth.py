@@ -4,7 +4,7 @@ from bson import ObjectId
 from fastapi import HTTPException, Header
 from jose import jwt
 from passlib.context import CryptContext
-from database import player_comments_collection, users_collection
+from database import player_cache_collection, player_comments_collection, users_collection
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -55,6 +55,42 @@ def serialize_player_comment(comment, current_email=None):
         "created_at": format_comment_timestamp(created_at),
         "can_delete": bool(current_email and author_email == current_email),
     }
+
+
+def get_cached_player_name(player_id: int):
+    cached_player = player_cache_collection.find_one(
+        {"player_id": player_id},
+        {"_id": 0, "name": 1, "data.name": 1, "data.common_player_info": 1, "data.player_info": 1}
+    )
+
+    if not cached_player:
+        return None
+
+    if cached_player.get("name"):
+        return cached_player["name"]
+
+    if cached_player.get("data", {}).get("name"):
+        return cached_player["data"]["name"]
+
+    player_info_candidates = [
+        cached_player.get("data", {}).get("common_player_info"),
+        cached_player.get("data", {}).get("player_info"),
+    ]
+
+    for player_info in player_info_candidates:
+        if not isinstance(player_info, list) or not player_info:
+            continue
+
+        player_name = (
+            player_info[0].get("DISPLAY_FIRST_LAST") or
+            player_info[0].get("DISPLAY_NAME") or
+            player_info[0].get("PLAYER_NAME")
+        )
+
+        if player_name:
+            return player_name
+
+    return None
 
 def register_user(data):
     pw_bytes = data.password.encode("utf-8")
@@ -182,6 +218,43 @@ def get_player_comments(player_id: int, authorization: str = Header(None)):
     ).sort("created_at", -1).limit(100)
 
     return {"comments": [serialize_player_comment(comment, current_email) for comment in comments]}
+
+
+def get_trending_player_comments(hours: int = 24, limit: int = 6):
+    bounded_hours = max(1, min(int(hours or 24), 168))
+    bounded_limit = max(1, min(int(limit or 6), 20))
+    since = datetime.now(timezone.utc) - timedelta(hours=bounded_hours)
+
+    trending_players = list(player_comments_collection.aggregate([
+        {"$match": {"created_at": {"$gte": since}}},
+        {"$group": {"_id": "$player_id", "comment_count": {"$sum": 1}}},
+        {"$sort": {"comment_count": -1, "_id": 1}},
+        {"$limit": bounded_limit},
+    ]))
+
+    players = []
+
+    for player in trending_players:
+        player_id = player.get("_id")
+
+        if not player_id:
+            continue
+
+        player_name = get_cached_player_name(player_id)
+
+        if not player_name:
+            continue
+
+        players.append({
+            "id": player_id,
+            "name": player_name,
+            "comment_count": player.get("comment_count", 0),
+        })
+
+    return {
+        "players": players,
+        "hours": bounded_hours,
+    }
 
 
 def add_player_comment(player_id: int, data, authorization: str):
