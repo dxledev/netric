@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "rea
 import { useEffect } from "react"
 import Home from "./pages/Home"
 import PlayerSearch from "./pages/PlayerSearch"
+import UserProfile from "./pages/UserProfile"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
 import PlayerInfo from "./pages/PlayerInfo"
@@ -53,6 +54,7 @@ export default function App() {
 
         <Route element={<ProtectedRoutes />}>
           <Route path="/" element={<Home />} />
+          <Route path="/profile" element={<UserProfile />} />
           <Route path="/search" element={<PlayerSearch />} />
           <Route path="/player/:id" element={<PlayerInfo />} />
           <Route path="/player/:id/games/:gameKey" element={<GameSummary />} />

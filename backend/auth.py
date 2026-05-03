@@ -54,6 +54,42 @@ def login_user(data):
 
     return {"access_token": token}
 
+def change_user_password(data, authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    current_pw_bytes = data.current_password.encode("utf-8")
+    new_pw_bytes = data.new_password.encode("utf-8")
+
+    if len(current_pw_bytes) > 72 or len(new_pw_bytes) > 72:
+        raise HTTPException(status_code=400, detail="Password must be 72 bytes or less.")
+
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+
+    token = authorization.replace("Bearer ", "", 1)
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    email = payload["sub"]
+    user = users_collection.find_one({"email": email})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not pwd_context.verify(data.current_password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    users_collection.update_one(
+        {"email": email},
+        {"$set": {"password_hash": pwd_context.hash(data.new_password)}}
+    )
+
+    return {"message": "Password updated"}
+
 
 def get_user_favorites(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):

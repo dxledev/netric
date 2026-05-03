@@ -8,6 +8,7 @@ export default function Login() {
   const location = useLocation()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const redirectTo = location.state?.from?.pathname || "/"
@@ -100,13 +101,23 @@ export default function Login() {
                   <label className="mb-2 block text-sm font-medium text-slate-200">
                     Password
                   </label>
-                  <input
-                    type="password"
-                    placeholder="Enter your password"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors duration-300 placeholder:text-slate-400 focus:border-blue-300/50"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-20 text-white outline-none transition-colors duration-300 placeholder:text-slate-400 focus:border-blue-300/50"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(current => !current)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-3 py-1.5 text-xs font-medium text-blue-200 transition-colors duration-300 hover:bg-white/10 hover:text-white"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </div>
 
                 {error && (
