@@ -23,6 +23,20 @@ def build_primary_uri():
     return f"mongodb+srv://{user}:{pw}@{cluster}/netric?retryWrites=true&w=majority"
 
 
+def get_primary_uri():
+    configured_uri = os.getenv("MONGO_URI", "").strip()
+
+    if configured_uri:
+        return configured_uri
+
+    required_vars = ("MONGO_USER", "MONGO_PASS", "MONGO_CLUSTER")
+
+    if all(os.getenv(var) for var in required_vars):
+        return build_primary_uri()
+
+    return ""
+
+
 def _connect_with_retry(uri: str, label: str):
     last_error = None
 
@@ -48,17 +62,19 @@ def _connect_with_retry(uri: str, label: str):
     raise last_error
 
 
-primary_uri = build_primary_uri()
-stats_uri = os.getenv("MONGO_STATS_URI", "").strip() or primary_uri
+primary_uri = get_primary_uri()
+stats_uri = os.getenv("MONGO_STATS_URI", "").strip() or primary_uri or "mongodb://127.0.0.1:27017"
 stats_db_name = os.getenv("MONGO_STATS_DB", "netric_stats").strip() or "netric_stats"
+auth_uri = os.getenv("MONGO_AUTH_URI", "").strip() or stats_uri
+auth_db_name = os.getenv("MONGO_AUTH_DB", stats_db_name).strip() or stats_db_name
 
-client = _connect_with_retry(primary_uri, "primary")
 stats_client = _connect_with_retry(stats_uri, "stats")
+auth_client = stats_client if auth_uri == stats_uri else _connect_with_retry(auth_uri, "auth")
 
-db = client["netric"]
 stats_db = stats_client[stats_db_name]
+auth_db = auth_client[auth_db_name]
 
-users_collection = db["users"]
-player_comments_collection = db["player_comments"]
+users_collection = auth_db["users"]
+player_comments_collection = auth_db["player_comments"]
 player_cache_collection = stats_db["player_cache"]
 fetch_queue_collection = stats_db["fetch_queue"]

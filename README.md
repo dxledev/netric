@@ -2,14 +2,18 @@
 
 ### an nba stats website
 
-## Mongo split storage
+## Mongo storage
 
-You can keep auth/user data on Atlas and store player stats on a second MongoDB.
+By default, auth/user data and player stats use the same MongoDB connection. For the EC2 deployment, point `MONGO_STATS_URI` at the local MongoDB instance and users will be stored there too.
 
-- Required existing vars for primary DB: `MONGO_USER`, `MONGO_PASS`, `MONGO_CLUSTER`
-- Optional stats DB vars:
-  - `MONGO_STATS_URI` (defaults to primary URI when unset)
+- Local DB vars:
+  - `MONGO_STATS_URI` (defaults to `mongodb://127.0.0.1:27017` when no primary Mongo URI is configured)
   - `MONGO_STATS_DB` (defaults to `netric_stats`)
+- Optional auth override vars:
+  - `MONGO_AUTH_URI` (defaults to `MONGO_STATS_URI`)
+  - `MONGO_AUTH_DB` (defaults to `MONGO_STATS_DB`)
+- Optional Atlas/primary vars for compatibility:
+  - `MONGO_URI`, or `MONGO_USER` + `MONGO_PASS` + `MONGO_CLUSTER`
 
 Example with an SSH tunnel to a Linux Mint machine:
 
@@ -20,5 +24,5 @@ export MONGO_STATS_DB='netric_stats'
 ```
 
 In this setup:
-- `users` stays on the primary Atlas DB
+- `users` and `player_comments` use the local stats DB unless `MONGO_AUTH_URI` or `MONGO_AUTH_DB` are set
 - `player_cache` and `fetch_queue` use the stats DB
