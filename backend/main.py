@@ -5,11 +5,13 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import AuthRequest, ChangePasswordRequest, PlayerCommentRequest
+from models import AuthRequest, ChangePasswordRequest, PlayerCommentRequest, UserProfileRequest
 from auth import (
     register_user,
     login_user,
     change_user_password,
+    get_user_profile,
+    update_user_profile,
     get_user_favorites,
     add_favorite_player,
     remove_favorite_player,
@@ -90,6 +92,16 @@ def login(data: AuthRequest):
 @app.post("/api/change-password")
 def change_password(data: ChangePasswordRequest, authorization: str = Header(None)):
     return change_user_password(data, authorization)
+
+@app.get("/profile")
+@app.get("/api/profile")
+def profile(authorization: str = Header(None)):
+    return get_user_profile(authorization)
+
+@app.put("/profile")
+@app.put("/api/profile")
+def save_profile(data: UserProfileRequest, authorization: str = Header(None)):
+    return update_user_profile(data, authorization)
 
 # ---------------------------
 # FAVORITES

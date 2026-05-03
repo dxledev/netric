@@ -81,11 +81,20 @@ function readStoredProfile(email, token) {
   }
 }
 
+function normalizeProfile(data, fallbackUsername) {
+  return {
+    username: data?.username || fallbackUsername,
+    image: data?.profile_image || data?.image || null,
+  }
+}
+
 export default function PlayerInfo() {
   const navigate = useNavigate()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null
+  const currentUserPayload = decodeTokenPayload(token)
+  const currentUserEmail = currentUserPayload?.sub || "Unknown email"
 
   function getFavoritesCacheKey() {
     return token ? `netric:favorites:${token}` : null
@@ -226,7 +235,46 @@ export default function PlayerInfo() {
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [deletingCommentId, setDeletingCommentId] = useState(null)
   const [relativeTimeNow, setRelativeTimeNow] = useState(() => Date.now())
+  const [currentUserProfile, setCurrentUserProfile] = useState(() => {
+    const localProfile = readStoredProfile(currentUserEmail, token)
+
+    return normalizeProfile(localProfile, getDisplayName(currentUserEmail))
+  })
   const gameLogScrollRef = useRef(null)
+
+  useEffect(() => {
+    const localProfile = readStoredProfile(currentUserEmail, token)
+    setCurrentUserProfile(normalizeProfile(localProfile, getDisplayName(currentUserEmail)))
+
+    if (!token) {
+      return undefined
+    }
+
+    let ignore = false
+
+    axios
+      .get(`${API_BASE}/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then(res => {
+        if (ignore) {
+          return
+        }
+
+        setCurrentUserProfile(normalizeProfile(res.data, getDisplayName(currentUserEmail)))
+      })
+      .catch(error => {
+        if (ignore) {
+          return
+        }
+
+        console.error(error)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [currentUserEmail, token])
 
   useEffect(() => {
     const nextCachedSummary = readPlayerSummaryCache(id)
@@ -403,11 +451,8 @@ export default function PlayerInfo() {
       </div>
     )
 
-  const currentUserPayload = decodeTokenPayload(token)
-  const currentUserEmail = currentUserPayload?.sub || "Unknown email"
-  const currentStoredProfile = readStoredProfile(currentUserEmail, token) || {}
-  const currentUsername = currentStoredProfile.username || getDisplayName(currentUserEmail)
-  const currentProfileImage = currentStoredProfile.image || null
+  const currentUsername = currentUserProfile.username || getDisplayName(currentUserEmail)
+  const currentProfileImage = currentUserProfile.image || null
 
   async function handleCommentSubmit(event) {
     event.preventDefault()

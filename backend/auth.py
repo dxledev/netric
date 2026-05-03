@@ -16,6 +16,21 @@ def normalize_email(email: str):
     return str(email or "").strip().lower()
 
 
+def get_default_username(email: str):
+    return normalize_email(email).split("@")[0] or "Netric User"
+
+
+def serialize_user_profile(user, email: str):
+    username = (user or {}).get("username") or get_default_username(email)
+
+    return {
+        "email": email,
+        "username": username,
+        "profile_image": (user or {}).get("profile_image"),
+        "has_profile": bool((user or {}).get("username") or (user or {}).get("profile_image")),
+    }
+
+
 def get_email_from_authorization(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -142,6 +157,49 @@ def login_user(data):
     )
 
     return {"access_token": token}
+
+
+def get_user_profile(authorization: str = Header(None)):
+    email = get_email_from_authorization(authorization)
+    user = users_collection.find_one(
+        {"email": email},
+        {"_id": 0, "email": 1, "username": 1, "profile_image": 1}
+    )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return serialize_user_profile(user, email)
+
+
+def update_user_profile(data, authorization: str = Header(None)):
+    email = get_email_from_authorization(authorization)
+    username = (data.username or "").strip()
+
+    if not username:
+        raise HTTPException(status_code=400, detail="Username cannot be blank")
+
+    if len(username) > 80:
+        raise HTTPException(status_code=400, detail="Username must be 80 characters or less")
+
+    profile_image = data.profile_image if data.profile_image else None
+    result = users_collection.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "username": username,
+                "profile_image": profile_image,
+            }
+        }
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return serialize_user_profile({
+        "username": username,
+        "profile_image": profile_image,
+    }, email)
 
 def change_user_password(data, authorization: str = Header(None)):
     current_pw_bytes = data.current_password.encode("utf-8")
@@ -274,8 +332,16 @@ def add_player_comment(player_id: int, data, authorization: str):
     if len(text) > 600:
         raise HTTPException(status_code=400, detail="Comment must be 600 characters or less")
 
-    username = (data.username or "").strip() or email.split("@")[0] or "Netric User"
-    profile_image = data.profile_image if data.profile_image else None
+    user = users_collection.find_one(
+        {"email": email},
+        {"_id": 0, "username": 1, "profile_image": 1}
+    ) or {}
+    username = (
+        user.get("username") or
+        (data.username or "").strip() or
+        get_default_username(email)
+    )
+    profile_image = user.get("profile_image") or (data.profile_image if data.profile_image else None)
     created_at = datetime.now(timezone.utc)
     result = player_comments_collection.insert_one({
         "player_id": player_id,

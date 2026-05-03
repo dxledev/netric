@@ -118,6 +118,14 @@ function writeStoredProfile(email, token, profile) {
   }
 }
 
+function normalizeProfile(data, fallbackUsername) {
+  return {
+    username: data?.username || fallbackUsername,
+    image: data?.profile_image || data?.image || null,
+    hasProfile: Boolean(data?.has_profile),
+  }
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -185,7 +193,8 @@ export default function UserProfile() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const storedProfile = readStoredProfile(email, token) || {
+    const localProfile = readStoredProfile(email, token)
+    const storedProfile = localProfile || {
       username: defaultUsername,
       image: null,
     }
@@ -195,7 +204,74 @@ export default function UserProfile() {
     setDraftImage(storedProfile.image || null)
     setEditingProfile(false)
     setProfileMessage(null)
-  }, [defaultUsername, email, token])
+
+    if (!token) {
+      return undefined
+    }
+
+    let ignore = false
+
+    axios
+      .get(`${API_BASE}/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then(async res => {
+        if (ignore) {
+          return
+        }
+
+        const serverProfile = normalizeProfile(res.data, defaultUsername)
+        const hasLocalProfile = Boolean(localProfile?.username || localProfile?.image)
+
+        if (!serverProfile.hasProfile && hasLocalProfile) {
+          const migratedProfile = normalizeProfile(localProfile, defaultUsername)
+          const migrationRes = await axios.put(
+            `${API_BASE}/profile`,
+            {
+              username: migratedProfile.username,
+              profile_image: migratedProfile.image,
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+
+          if (ignore) {
+            return
+          }
+
+          const nextProfile = normalizeProfile(migrationRes.data, defaultUsername)
+          writeStoredProfile(email, token, nextProfile)
+          setEditableProfile(nextProfile)
+          setDraftUsername(nextProfile.username)
+          setDraftImage(nextProfile.image || null)
+          return
+        }
+
+        writeStoredProfile(email, token, serverProfile)
+        setEditableProfile(serverProfile)
+        setDraftUsername(serverProfile.username)
+        setDraftImage(serverProfile.image || null)
+      })
+      .catch(err => {
+        if (ignore) {
+          return
+        }
+
+        if (err?.response?.status === 401) {
+          window.localStorage.removeItem("token")
+          navigate("/login")
+          return
+        }
+
+        console.error(err)
+        setProfileMessage("Unable to load saved profile right now.")
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [defaultUsername, email, navigate, token])
 
   useEffect(() => {
     if (!token) {
@@ -284,7 +360,7 @@ export default function UserProfile() {
     }
   }
 
-  function handleSaveProfile() {
+  async function handleSaveProfile() {
     const trimmedUsername = draftUsername.trim()
 
     if (!trimmedUsername) {
@@ -292,19 +368,38 @@ export default function UserProfile() {
       return
     }
 
-    const nextProfile = {
-      username: trimmedUsername,
-      image: draftImage,
-    }
+    try {
+      setProfileMessage("Saving profile...")
+      const res = await axios.put(
+        `${API_BASE}/profile`,
+        {
+          username: trimmedUsername,
+          profile_image: draftImage,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      const nextProfile = normalizeProfile(res.data, trimmedUsername)
 
-    if (!writeStoredProfile(email, token, nextProfile)) {
-      setProfileMessage("Unable to save profile picture in this browser. Try a smaller image.")
-      return
-    }
+      if (!writeStoredProfile(email, token, nextProfile)) {
+        setProfileMessage("Profile saved, but this browser could not cache the profile picture.")
+      } else {
+        setProfileMessage("Profile updated.")
+      }
 
-    setEditableProfile(nextProfile)
-    setEditingProfile(false)
-    setProfileMessage("Profile updated.")
+      setEditableProfile(nextProfile)
+      setEditingProfile(false)
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        window.localStorage.removeItem("token")
+        navigate("/login")
+        return
+      }
+
+      console.error(err)
+      setProfileMessage(err?.response?.data?.detail || "Unable to save profile right now.")
+    }
   }
 
   function handleCancelEdit() {
