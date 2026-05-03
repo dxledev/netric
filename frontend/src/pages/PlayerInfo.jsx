@@ -329,11 +329,17 @@ export default function PlayerInfo() {
   }
 
   function parseGameDate(game) {
-    if (!game?.game_date) {
+    const rawDate = game?.game_date || game?.date
+
+    if (!rawDate) {
       return null
     }
 
-    const parsedDate = new Date(`${game.game_date}T00:00:00`)
+    const dateText = String(rawDate)
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateText)
+      ? new Date(`${dateText}T00:00:00`)
+      : new Date(dateText)
+
     return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
   }
 
@@ -592,6 +598,10 @@ export default function PlayerInfo() {
     return `Playoff Round ${roundIndex + 1}`
   }
 
+  function getPlayInRoundLabel(conference) {
+    return conference ? `${conference} Conference Play-In` : "Conference Play-In"
+  }
+
   function getPlayoffGameTimestamp(game) {
     const parsedDate = parseGameDate(game)
     return parsedDate ? parsedDate.getTime() : null
@@ -614,6 +624,16 @@ export default function PlayerInfo() {
     }
 
     return secondEntry.index - firstEntry.index
+  }
+
+  function getChronologicalGameEntries(games) {
+    if (!Array.isArray(games)) {
+      return []
+    }
+
+    return games
+      .map((game, index) => ({ game, index }))
+      .sort(comparePlayoffEntriesChronologically)
   }
 
   function shouldStartNextPlayoffSeries(currentSeries, nextEntry) {
@@ -680,16 +700,19 @@ export default function PlayerInfo() {
 
   function getPostSeasonGameLogRows(playInGames, playoffGames) {
     const rows = []
+    const chronologicalPlayInEntries = getChronologicalGameEntries(playInGames)
 
-    if (Array.isArray(playInGames) && playInGames.length > 0) {
+    if (chronologicalPlayInEntries.length > 0) {
+      const firstGameTeams = getPlayoffMatchupTeams(chronologicalPlayInEntries[0].game)
+
       rows.push({
         type: "group",
         key: "playin-group",
-        label: "Play-In",
-        count: playInGames.length,
+        label: getPlayInRoundLabel(firstGameTeams.playerTeam?.conference),
+        count: chronologicalPlayInEntries.length,
       })
 
-      playInGames.forEach((game, index) => {
+      chronologicalPlayInEntries.forEach(({ game, index }) => {
         rows.push({
           type: "game",
           key: `playin-${getGameLogKey(game, index)}-row`,
@@ -697,6 +720,16 @@ export default function PlayerInfo() {
           index,
         })
       })
+
+      const playInAverages = getGameLogAverages(playInGames)
+
+      if (playInAverages) {
+        rows.push({
+          type: "groupAverage",
+          key: "playin-avg",
+          averages: playInAverages,
+        })
+      }
     }
 
     if (!Array.isArray(playoffGames) || playoffGames.length === 0) {
@@ -726,6 +759,16 @@ export default function PlayerInfo() {
           index,
         })
       })
+
+      const seriesAverages = getGameLogAverages(series.entries.map(({ game }) => game))
+
+      if (seriesAverages) {
+        rows.push({
+          type: "groupAverage",
+          key: `playoff-round-${roundIndex}-${seriesIndex}-avg`,
+          averages: seriesAverages,
+        })
+      }
     })
 
     return rows
