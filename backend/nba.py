@@ -10,7 +10,7 @@ from database import fetch_queue_collection, player_cache_collection
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 13
+SUMMARY_VERSION = 14
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -272,6 +272,25 @@ def get_game_value(game, *keys, default=None):
     return default
 
 
+def parse_game_log_date(value):
+    if value is None or pd.isna(value):
+        return pd.NaT
+
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return pd.Timestamp(value)
+
+    raw_value = str(value).strip()
+    if not raw_value:
+        return pd.NaT
+
+    for date_format in ("%b %d, %Y", "%B %d, %Y", "%Y-%m-%d", "%m/%d/%Y"):
+        parsed_date = pd.to_datetime(raw_value, format=date_format, errors="coerce")
+        if not pd.isna(parsed_date):
+            return parsed_date
+
+    return pd.to_datetime(raw_value, errors="coerce")
+
+
 def normalize_game_log(game_log: pd.DataFrame):
     if game_log.empty:
         return []
@@ -282,7 +301,7 @@ def normalize_game_log(game_log: pd.DataFrame):
     if "GAME_DATE" not in prepared_log and "date" in prepared_log:
         prepared_log["GAME_DATE"] = prepared_log["date"]
 
-    prepared_log["GAME_DATE"] = pd.to_datetime(prepared_log["GAME_DATE"], errors="coerce")
+    prepared_log["GAME_DATE"] = prepared_log["GAME_DATE"].map(parse_game_log_date)
     prepared_log = prepared_log.sort_values("GAME_DATE", ascending=False)
 
     normalized_games = []
