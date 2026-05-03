@@ -7,6 +7,80 @@ import { API_BASE } from "../api"
 import { getGameLogKey } from "../utils/gameLog"
 import { readPlayerSummaryCache, writePlayerSummaryCache } from "../utils/playerSummaryCache"
 
+function decodeBase64Url(value) {
+  const normalizedValue = value.replace(/-/g, "+").replace(/_/g, "/")
+  const paddedValue = normalizedValue.padEnd(normalizedValue.length + ((4 - normalizedValue.length % 4) % 4), "=")
+
+  return window.atob(paddedValue)
+}
+
+function decodeTokenPayload(token) {
+  if (!token || typeof window === "undefined") {
+    return null
+  }
+
+  try {
+    const payloadSegment = token.split(".")[1]
+
+    if (!payloadSegment) {
+      return null
+    }
+
+    return JSON.parse(decodeBase64Url(payloadSegment))
+  } catch (error) {
+    console.error("Failed to decode profile token", error)
+    return null
+  }
+}
+
+function getDisplayName(email) {
+  const [name = "Netric User"] = String(email || "Netric User").split("@")
+
+  return name
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map(part => `${part[0]?.toUpperCase() || ""}${part.slice(1)}`)
+    .join(" ") || "Netric User"
+}
+
+function getInitials(value) {
+  const normalizedValue = String(value || "User")
+  const [name = normalizedValue] = normalizedValue.split("@")
+  const parts = name.split(/[._\s-]+/).filter(Boolean)
+  const initials = parts.slice(0, 2).map(part => part[0]?.toUpperCase()).join("")
+
+  return initials || "U"
+}
+
+function getProfileStorageKey(email, token) {
+  if (email && email !== "Unknown email") {
+    return `netric:profile:${email}`
+  }
+
+  return token ? `netric:profile:${token}` : null
+}
+
+function readStoredProfile(email, token) {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const cacheKey = getProfileStorageKey(email, token)
+
+  if (!cacheKey) {
+    return null
+  }
+
+  try {
+    const rawProfile = window.localStorage.getItem(cacheKey)
+
+    return rawProfile ? JSON.parse(rawProfile) : null
+  } catch (error) {
+    console.error("Failed to read stored profile", error)
+    return null
+  }
+}
+
 export default function PlayerInfo() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -145,6 +219,13 @@ export default function PlayerInfo() {
   const [loading, setLoading] = useState(() => !cachedSummary)
   const [isFavorited, setIsFavorited] = useState(() => isPlayerFavorited(normalizedPlayerId))
   const [loadError, setLoadError] = useState("")
+  const [comments, setComments] = useState([])
+  const [commentsLoading, setCommentsLoading] = useState(true)
+  const [commentsError, setCommentsError] = useState("")
+  const [commentDraft, setCommentDraft] = useState("")
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [deletingCommentId, setDeletingCommentId] = useState(null)
+  const [relativeTimeNow, setRelativeTimeNow] = useState(() => Date.now())
   const gameLogScrollRef = useRef(null)
 
   useEffect(() => {
@@ -206,6 +287,57 @@ export default function PlayerInfo() {
   useEffect(() => {
     setIsFavorited(isPlayerFavorited(normalizedPlayerId))
   }, [normalizedPlayerId])
+
+  useEffect(() => {
+    let ignore = false
+
+    setCommentsLoading(true)
+    setCommentsError("")
+
+    axios
+      .get(`${API_BASE}/player/${id}/comments`, token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : undefined
+      )
+      .then(res => {
+        if (ignore) {
+          return
+        }
+
+        setComments(Array.isArray(res.data?.comments) ? res.data.comments : [])
+      })
+      .catch(err => {
+        console.error(err)
+
+        if (ignore) {
+          return
+        }
+
+        setComments([])
+        setCommentsError("Unable to load comments right now.")
+      })
+      .finally(() => {
+        if (ignore) {
+          return
+        }
+
+        setCommentsLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [id, token])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRelativeTimeNow(Date.now())
+    }, 60000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [])
 
   useEffect(() => {
     const playoffSeasons = Array.isArray(data?.available_playoff_game_log_seasons) ? data.available_playoff_game_log_seasons : []
@@ -270,6 +402,79 @@ export default function PlayerInfo() {
         </div>
       </div>
     )
+
+  const currentUserPayload = decodeTokenPayload(token)
+  const currentUserEmail = currentUserPayload?.sub || "Unknown email"
+  const currentStoredProfile = readStoredProfile(currentUserEmail, token) || {}
+  const currentUsername = currentStoredProfile.username || getDisplayName(currentUserEmail)
+  const currentProfileImage = currentStoredProfile.image || null
+
+  async function handleCommentSubmit(event) {
+    event.preventDefault()
+
+    const trimmedComment = commentDraft.trim()
+
+    if (!trimmedComment) {
+      return
+    }
+
+    if (!token) {
+      navigate("/login")
+      return
+    }
+
+    setCommentSubmitting(true)
+    setCommentsError("")
+
+    try {
+      const res = await axios.post(
+        `${API_BASE}/player/${id}/comments`,
+        {
+          text: trimmedComment,
+          username: currentUsername,
+          profile_image: currentProfileImage,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      const createdComment = res.data?.comment
+
+      if (createdComment) {
+        setComments(currentComments => [createdComment, ...currentComments])
+      }
+
+      setCommentDraft("")
+    } catch (error) {
+      console.error(error)
+      const detail = error.response?.data?.detail
+      setCommentsError(detail || "Unable to post that comment right now.")
+    } finally {
+      setCommentSubmitting(false)
+    }
+  }
+
+  async function handleDeleteComment(commentId) {
+    if (!token || !commentId) {
+      return
+    }
+
+    setDeletingCommentId(commentId)
+    setCommentsError("")
+
+    try {
+      await axios.delete(`${API_BASE}/player/${id}/comments/${commentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setComments(currentComments => currentComments.filter(comment => comment.id !== commentId))
+    } catch (error) {
+      console.error(error)
+      const detail = error.response?.data?.detail
+      setCommentsError(detail || "Unable to delete that comment right now.")
+    } finally {
+      setDeletingCommentId(null)
+    }
+  }
 
   function formatNumber(value, decimals = 1) {
     if (value == null || Number.isNaN(Number(value))) {
@@ -364,6 +569,33 @@ export default function PlayerInfo() {
       day: "numeric",
       year: "numeric",
     }).format(date)
+  }
+
+  function formatRelativeTime(value, now = Date.now()) {
+    const parsedDate = new Date(value)
+
+    if (!value || Number.isNaN(parsedDate.getTime())) {
+      return "Just now"
+    }
+
+    const diffSeconds = Math.max(0, Math.floor((now - parsedDate.getTime()) / 1000))
+    const units = [
+      { label: "year", seconds: 31536000 },
+      { label: "month", seconds: 2592000 },
+      { label: "week", seconds: 604800 },
+      { label: "day", seconds: 86400 },
+      { label: "hour", seconds: 3600 },
+      { label: "minute", seconds: 60 },
+    ]
+    const matchedUnit = units.find(unit => diffSeconds >= unit.seconds)
+
+    if (!matchedUnit) {
+      return "Just now"
+    }
+
+    const count = Math.floor(diffSeconds / matchedUnit.seconds)
+
+    return `${count} ${matchedUnit.label}${count === 1 ? "" : "s"} ago`
   }
 
   function getWeekStart(date) {
@@ -1061,6 +1293,7 @@ export default function PlayerInfo() {
     { id: "games", label: "Game Logs" },
     { id: "career", label: "Game Highs" },
     { id: "advanced", label: "Advanced" },
+    { id: "comments", label: "Comments" },
   ]
 
   function getSeasonStartYear(seasonId) {
@@ -2015,6 +2248,125 @@ export default function PlayerInfo() {
                     <p className="mt-3 text-sm text-slate-300">
                       This section can hold usage, rate stats, and comparison visuals once the API returns them.
                     </p>
+                  </div>
+                )}
+
+                {tab === "comments" && (
+                  <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+                    <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Player Comments</p>
+                      <h2 className="mt-3 text-2xl font-semibold text-white">
+                        {comments.length === 1 ? "1 comment" : `${comments.length} comments`}
+                      </h2>
+                      <p className="mt-2 text-sm text-slate-300">
+                        Share quick notes, scouting thoughts, or reactions for {data.name}.
+                      </p>
+
+                      <form onSubmit={handleCommentSubmit} className="mt-5">
+                        <div className="mb-3 flex items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-sm font-semibold text-white">
+                            {currentProfileImage ? (
+                              <img
+                                src={currentProfileImage}
+                                alt={`${currentUsername} profile`}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              getInitials(currentUsername || currentUserEmail)
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-white">{currentUsername}</p>
+                            <p className="text-xs text-slate-400">Posting as your profile</p>
+                          </div>
+                        </div>
+
+                        <textarea
+                          value={commentDraft}
+                          onChange={event => setCommentDraft(event.target.value)}
+                          maxLength={600}
+                          rows={5}
+                          placeholder="Leave a comment on this player..."
+                          className="w-full resize-none rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 placeholder:text-slate-500 focus:border-blue-300/50"
+                        />
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <p className="text-xs text-slate-500">{commentDraft.length}/600</p>
+                          <button
+                            type="submit"
+                            disabled={commentSubmitting || !commentDraft.trim()}
+                            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-white"
+                          >
+                            {commentSubmitting ? "Posting" : "Post Comment"}
+                          </button>
+                        </div>
+                      </form>
+
+                      {commentsError && (
+                        <p className="mt-4 rounded-xl border border-rose-300/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                          {commentsError}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
+                      {commentsLoading ? (
+                        <div className="rounded-2xl border border-dashed border-white/12 bg-slate-950/40 p-8 text-center">
+                          <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-blue-400/30 border-t-blue-300 animate-spin" />
+                          <p className="text-sm font-medium text-white">Loading comments</p>
+                        </div>
+                      ) : comments.length > 0 ? (
+                        <div className={`grid gap-3 ${comments.length > 4 ? "comments-scroll overflow-y-auto pr-2" : ""}`}>
+                          {comments.map(comment => (
+                            <article
+                              key={comment.id || `${comment.username}-${comment.created_at}`}
+                              className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-sm font-semibold text-white">
+                                  {comment.profile_image ? (
+                                    <img
+                                      src={comment.profile_image}
+                                      alt={`${comment.username || "User"} profile`}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    getInitials(comment.username)
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                      <p className="font-semibold text-white">{comment.username || "Netric User"}</p>
+                                      <p className="text-xs text-slate-500">{formatRelativeTime(comment.created_at, relativeTimeNow)}</p>
+                                    </div>
+                                    {comment.can_delete && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteComment(comment.id)}
+                                        disabled={deletingCommentId === comment.id}
+                                        className="rounded-lg border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-100 transition-colors duration-300 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {deletingCommentId === comment.id ? "Deleting" : "Delete"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">
+                                    {comment.text}
+                                  </p>
+                                </div>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-white/12 bg-slate-950/40 p-8 text-center">
+                          <p className="text-sm font-medium text-white">No comments yet</p>
+                          <p className="mt-2 text-sm text-slate-400">
+                            Be the first to leave a comment on {data.name}.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

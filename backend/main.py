@@ -5,14 +5,17 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import AuthRequest, ChangePasswordRequest
+from models import AuthRequest, ChangePasswordRequest, PlayerCommentRequest
 from auth import (
     register_user,
     login_user,
     change_user_password,
     get_user_favorites,
     add_favorite_player,
-    remove_favorite_player
+    remove_favorite_player,
+    get_player_comments,
+    add_player_comment,
+    delete_player_comment
 )
 
 from database import fetch_queue_collection, player_cache_collection
@@ -119,6 +122,24 @@ def get_player_summary(player_id: int):
         )
 
     return build_player_summary(player_id)
+
+
+@app.get("/player/{player_id}/comments")
+@app.get("/api/player/{player_id}/comments")
+def player_comments(player_id: int, authorization: str = Header(None)):
+    return get_player_comments(player_id, authorization)
+
+
+@app.post("/player/{player_id}/comments")
+@app.post("/api/player/{player_id}/comments")
+def create_player_comment(player_id: int, data: PlayerCommentRequest, authorization: str = Header(None)):
+    return add_player_comment(player_id, data, authorization)
+
+
+@app.delete("/player/{player_id}/comments/{comment_id}")
+@app.delete("/api/player/{player_id}/comments/{comment_id}")
+def remove_player_comment(player_id: int, comment_id: str, authorization: str = Header(None)):
+    return delete_player_comment(player_id, comment_id, authorization)
 
 # ---------------------------
 # DEBUG

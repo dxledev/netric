@@ -1,14 +1,60 @@
 import os
 from datetime import datetime, timedelta, timezone
+from bson import ObjectId
 from fastapi import HTTPException, Header
 from jose import jwt
 from passlib.context import CryptContext
-from database import users_collection
+from database import player_comments_collection, users_collection
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_email_from_authorization(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization.replace("Bearer ", "", 1)
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return payload["sub"]
+
+
+def get_optional_email_from_authorization(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+
+    return get_email_from_authorization(authorization)
+
+
+def format_comment_timestamp(created_at):
+    if not hasattr(created_at, "isoformat"):
+        return created_at
+
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+
+    return created_at.isoformat()
+
+
+def serialize_player_comment(comment, current_email=None):
+    created_at = comment.get("created_at")
+    author_email = comment.get("email")
+
+    return {
+        "id": str(comment.get("_id")),
+        "player_id": comment.get("player_id"),
+        "text": comment.get("text", ""),
+        "username": comment.get("username") or "Netric User",
+        "profile_image": comment.get("profile_image"),
+        "created_at": format_comment_timestamp(created_at),
+        "can_delete": bool(current_email and author_email == current_email),
+    }
 
 def register_user(data):
     pw_bytes = data.password.encode("utf-8")
@@ -55,9 +101,6 @@ def login_user(data):
     return {"access_token": token}
 
 def change_user_password(data, authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-
     current_pw_bytes = data.current_password.encode("utf-8")
     new_pw_bytes = data.new_password.encode("utf-8")
 
@@ -67,14 +110,7 @@ def change_user_password(data, authorization: str = Header(None)):
     if len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
 
-    token = authorization.replace("Bearer ", "", 1)
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    email = payload["sub"]
+    email = get_email_from_authorization(authorization)
     user = users_collection.find_one({"email": email})
 
     if not user:
@@ -92,17 +128,7 @@ def change_user_password(data, authorization: str = Header(None)):
 
 
 def get_user_favorites(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-
-    token = authorization.replace("Bearer ", "", 1)
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    email = payload["sub"]
+    email = get_email_from_authorization(authorization)
 
     user = users_collection.find_one(
         {"email": email},
@@ -115,17 +141,7 @@ def get_user_favorites(authorization: str = Header(None)):
     return user["favorites"]
 
 def add_favorite_player(data, authorization: str):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-
-    token = authorization.replace("Bearer ", "", 1)
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    email = payload["sub"]
+    email = get_email_from_authorization(authorization)
 
     users_collection.update_one(
         {"email": email},
@@ -142,17 +158,7 @@ def add_favorite_player(data, authorization: str):
     return {"message": "Player favorited"}
 
 def remove_favorite_player(player_id: int, authorization: str):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-
-    token = authorization.replace("Bearer ", "", 1)
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    email = payload["sub"]
+    email = get_email_from_authorization(authorization)
 
     result = users_collection.update_one(
         {"email": email},
@@ -167,3 +173,71 @@ def remove_favorite_player(player_id: int, authorization: str):
         raise HTTPException(status_code=404, detail="Player not found in favorites")
 
     return {"message": "Player removed"}
+
+
+def get_player_comments(player_id: int, authorization: str = Header(None)):
+    current_email = get_optional_email_from_authorization(authorization)
+    comments = player_comments_collection.find(
+        {"player_id": player_id}
+    ).sort("created_at", -1).limit(100)
+
+    return {"comments": [serialize_player_comment(comment, current_email) for comment in comments]}
+
+
+def add_player_comment(player_id: int, data, authorization: str):
+    email = get_email_from_authorization(authorization)
+    text = data.text.strip()
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Comment cannot be empty")
+
+    if len(text) > 600:
+        raise HTTPException(status_code=400, detail="Comment must be 600 characters or less")
+
+    username = (data.username or "").strip() or email.split("@")[0] or "Netric User"
+    profile_image = data.profile_image if data.profile_image else None
+    created_at = datetime.now(timezone.utc)
+    result = player_comments_collection.insert_one({
+        "player_id": player_id,
+        "email": email,
+        "text": text,
+        "username": username[:80],
+        "profile_image": profile_image,
+        "created_at": created_at,
+    })
+
+    return {
+        "comment": serialize_player_comment({
+            "_id": result.inserted_id,
+            "player_id": player_id,
+            "text": text,
+            "username": username[:80],
+            "profile_image": profile_image,
+            "created_at": created_at,
+            "email": email,
+        }, email)
+    }
+
+
+def delete_player_comment(player_id: int, comment_id: str, authorization: str):
+    email = get_email_from_authorization(authorization)
+
+    try:
+        object_id = ObjectId(comment_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid comment id")
+
+    comment = player_comments_collection.find_one({
+        "_id": object_id,
+        "player_id": player_id,
+    })
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    if comment.get("email") != email:
+        raise HTTPException(status_code=403, detail="You can only delete your own comments")
+
+    player_comments_collection.delete_one({"_id": object_id})
+
+    return {"message": "Comment deleted"}

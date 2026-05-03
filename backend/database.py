@@ -59,5 +59,6 @@ db = client["netric"]
 stats_db = stats_client[stats_db_name]
 
 users_collection = db["users"]
+player_comments_collection = db["player_comments"]
 player_cache_collection = stats_db["player_cache"]
 fetch_queue_collection = stats_db["fetch_queue"]
