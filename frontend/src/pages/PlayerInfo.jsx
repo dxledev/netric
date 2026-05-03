@@ -139,7 +139,8 @@ export default function PlayerInfo() {
   const [selectedGameLogSeason, setSelectedGameLogSeason] = useState("")
   const [selectedGameHighSeason, setSelectedGameHighSeason] = useState("all-time")
   const [splitMode, setSplitMode] = useState("default")
-  const [isPostSeason, setIsPostSeason] = useState(false)
+  const [gameLogDateSortDirection, setGameLogDateSortDirection] = useState("asc")
+  const [isPostSeason, setIsPostSeason] = useState(() => searchParams.get("postseason") === "1")
   const [data, setData] = useState(cachedSummary)
   const [loading, setLoading] = useState(() => !cachedSummary)
   const [isFavorited, setIsFavorited] = useState(() => isPlayerFavorited(normalizedPlayerId))
@@ -188,6 +189,9 @@ export default function PlayerInfo() {
 
   useEffect(() => {
     const nextTab = searchParams.get("tab")
+    const nextIsPostSeason = searchParams.get("postseason") === "1"
+
+    setIsPostSeason(nextIsPostSeason)
 
     if (nextTab === "games") {
       setTab("games")
@@ -374,9 +378,32 @@ export default function PlayerInfo() {
     return nextDate
   }
 
+  function normalizeGameLogEntries(games) {
+    if (!Array.isArray(games)) {
+      return []
+    }
+
+    return games.map((entry, fallbackIndex) => {
+      if (
+        entry &&
+        Object.prototype.hasOwnProperty.call(entry, "game") &&
+        Object.prototype.hasOwnProperty.call(entry, "index")
+      ) {
+        return entry
+      }
+
+      return {
+        game: entry,
+        index: fallbackIndex,
+      }
+    })
+  }
+
   function getGroupedGameLogRows(games, mode) {
+    const gameEntries = normalizeGameLogEntries(games)
+
     if (mode === "default") {
-      return games.map((game, index) => ({
+      return gameEntries.map(({ game, index }) => ({
         type: "game",
         key: `${getGameLogKey(game, index)}-row`,
         game,
@@ -387,7 +414,7 @@ export default function PlayerInfo() {
     const groupedRows = []
     const groups = new Map()
 
-    games.forEach((game, index) => {
+    gameEntries.forEach(({ game, index }) => {
       const parsedDate = parseGameDate(game)
 
       if (!parsedDate) {
@@ -494,6 +521,70 @@ export default function PlayerInfo() {
     { abbr: "UTA", conference: "Western", aliases: ["UTA", "Utah Jazz"] },
     { abbr: "WAS", conference: "Eastern", aliases: ["WAS", "WSB", "Washington Wizards", "Washington Bullets"] },
   ]
+  const nbaTeamNamesByAbbreviation = {
+    ATL: "Atlanta Hawks",
+    BKN: "Brooklyn Nets",
+    BOS: "Boston Celtics",
+    CHA: "Charlotte Hornets",
+    CHI: "Chicago Bulls",
+    CLE: "Cleveland Cavaliers",
+    DAL: "Dallas Mavericks",
+    DEN: "Denver Nuggets",
+    DET: "Detroit Pistons",
+    GSW: "Golden State Warriors",
+    HOU: "Houston Rockets",
+    IND: "Indiana Pacers",
+    LAC: "Los Angeles Clippers",
+    LAL: "Los Angeles Lakers",
+    MEM: "Memphis Grizzlies",
+    MIA: "Miami Heat",
+    MIL: "Milwaukee Bucks",
+    MIN: "Minnesota Timberwolves",
+    NOP: "New Orleans Pelicans",
+    NYK: "New York Knicks",
+    OKC: "Oklahoma City Thunder",
+    ORL: "Orlando Magic",
+    PHI: "Philadelphia 76ers",
+    PHX: "Phoenix Suns",
+    POR: "Portland Trail Blazers",
+    SAC: "Sacramento Kings",
+    SAS: "San Antonio Spurs",
+    TOR: "Toronto Raptors",
+    UTA: "Utah Jazz",
+    WAS: "Washington Wizards",
+  }
+  const nbaTeamLogoIdsByAbbreviation = {
+    ATL: "1610612737",
+    BKN: "1610612751",
+    BOS: "1610612738",
+    CHA: "1610612766",
+    CHI: "1610612741",
+    CLE: "1610612739",
+    DAL: "1610612742",
+    DEN: "1610612743",
+    DET: "1610612765",
+    GSW: "1610612744",
+    HOU: "1610612745",
+    IND: "1610612754",
+    LAC: "1610612746",
+    LAL: "1610612747",
+    MEM: "1610612763",
+    MIA: "1610612748",
+    MIL: "1610612749",
+    MIN: "1610612750",
+    NOP: "1610612740",
+    NYK: "1610612752",
+    OKC: "1610612760",
+    ORL: "1610612753",
+    PHI: "1610612755",
+    PHX: "1610612756",
+    POR: "1610612757",
+    SAC: "1610612758",
+    SAS: "1610612759",
+    TOR: "1610612761",
+    UTA: "1610612762",
+    WAS: "1610612764",
+  }
 
   function escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -533,6 +624,41 @@ export default function PlayerInfo() {
       playerTeam: null,
       opponentTeam: getTeamFromMatchupText(matchup),
     }
+  }
+
+  function getExpandedTeamName(team) {
+    const teamName = String(team?.name || "").trim()
+
+    if (teamName) {
+      return teamName
+    }
+
+    const teamAbbreviation = String(team?.abbreviation || team || "").trim().toUpperCase()
+    const matchedTeam = nbaTeamAliases.find(aliasTeam => aliasTeam.abbr === teamAbbreviation)
+      || getTeamFromMatchupText(teamAbbreviation)
+
+    return nbaTeamNamesByAbbreviation[matchedTeam?.abbr || teamAbbreviation] || teamAbbreviation
+  }
+
+  function getTeamAbbreviation(team) {
+    const teamAbbreviation = String(team?.abbreviation || "").trim().toUpperCase()
+
+    if (nbaTeamNamesByAbbreviation[teamAbbreviation]) {
+      return teamAbbreviation
+    }
+
+    const teamName = String(team?.name || team || "").trim()
+    const matchedTeam = nbaTeamAliases.find(aliasTeam =>
+      aliasTeam.aliases.some(alias => alias.toLowerCase() === teamName.toLowerCase())
+    ) || getTeamFromMatchupText(teamName)
+
+    return matchedTeam?.abbr || ""
+  }
+
+  function getTeamLogoUrl(team) {
+    const teamId = nbaTeamLogoIdsByAbbreviation[getTeamAbbreviation(team)]
+
+    return teamId ? `https://cdn.nba.com/logos/nba/${teamId}/primary/L/logo.svg` : ""
   }
 
   function getPlayoffOpponentKey(game) {
@@ -605,6 +731,32 @@ export default function PlayerInfo() {
   function getPlayoffGameTimestamp(game) {
     const parsedDate = parseGameDate(game)
     return parsedDate ? parsedDate.getTime() : null
+  }
+
+  function compareGameLogEntriesByDate(firstEntry, secondEntry, direction = "asc") {
+    const firstTimestamp = getPlayoffGameTimestamp(firstEntry.game)
+    const secondTimestamp = getPlayoffGameTimestamp(secondEntry.game)
+    const directionMultiplier = direction === "desc" ? -1 : 1
+
+    if (firstTimestamp != null && secondTimestamp != null && firstTimestamp !== secondTimestamp) {
+      return (firstTimestamp - secondTimestamp) * directionMultiplier
+    }
+
+    if (firstTimestamp != null && secondTimestamp == null) {
+      return -1
+    }
+
+    if (firstTimestamp == null && secondTimestamp != null) {
+      return 1
+    }
+
+    return (firstEntry.index - secondEntry.index) * directionMultiplier
+  }
+
+  function getSortedGameLogEntries(games, direction = "asc") {
+    return normalizeGameLogEntries(games).sort((firstEntry, secondEntry) =>
+      compareGameLogEntriesByDate(firstEntry, secondEntry, direction)
+    )
   }
 
   function comparePlayoffEntriesChronologically(firstEntry, secondEntry) {
@@ -698,21 +850,28 @@ export default function PlayerInfo() {
     return seriesBuckets
   }
 
-  function getPostSeasonGameLogRows(playInGames, playoffGames) {
+  function getPostSeasonGameLogRows(playInGames, playoffGames, dateSortDirection = "asc") {
     const rows = []
     const chronologicalPlayInEntries = getChronologicalGameEntries(playInGames)
+    const renderedPlayInEntries = dateSortDirection === "desc"
+      ? [...chronologicalPlayInEntries].reverse()
+      : chronologicalPlayInEntries
 
-    if (chronologicalPlayInEntries.length > 0) {
-      const firstGameTeams = getPlayoffMatchupTeams(chronologicalPlayInEntries[0].game)
+    function pushPlayInRows() {
+      if (renderedPlayInEntries.length === 0) {
+        return
+      }
+
+      const firstGameTeams = getPlayoffMatchupTeams(renderedPlayInEntries[0].game)
 
       rows.push({
         type: "group",
         key: "playin-group",
         label: getPlayInRoundLabel(firstGameTeams.playerTeam?.conference),
-        count: chronologicalPlayInEntries.length,
+        count: renderedPlayInEntries.length,
       })
 
-      chronologicalPlayInEntries.forEach(({ game, index }) => {
+      renderedPlayInEntries.forEach(({ game, index }) => {
         rows.push({
           type: "game",
           key: `playin-${getGameLogKey(game, index)}-row`,
@@ -732,29 +891,47 @@ export default function PlayerInfo() {
       }
     }
 
-    if (!Array.isArray(playoffGames) || playoffGames.length === 0) {
+    const playoffSeriesBuckets = Array.isArray(playoffGames) && playoffGames.length > 0
+      ? buildPlayoffSeriesBuckets(playoffGames).map((series, seriesIndex) => ({ ...series, seriesIndex }))
+      : []
+    const renderedPlayoffSeries = dateSortDirection === "desc"
+      ? [...playoffSeriesBuckets].reverse()
+      : playoffSeriesBuckets
+
+    if (dateSortDirection !== "desc") {
+      pushPlayInRows()
+    }
+
+    if (renderedPlayoffSeries.length === 0) {
+      if (dateSortDirection === "desc") {
+        pushPlayInRows()
+      }
+
       return rows
     }
 
-    buildPlayoffSeriesBuckets(playoffGames).forEach((series, seriesIndex) => {
+    renderedPlayoffSeries.forEach(series => {
       if (!series.entries || series.entries.length === 0) {
         return
       }
 
-      const roundIndex = series.roundIndex ?? seriesIndex
-      const firstGameTeams = getPlayoffMatchupTeams(series.entries[0].game)
+      const roundIndex = series.roundIndex ?? series.seriesIndex
+      const renderedSeriesEntries = dateSortDirection === "desc"
+        ? [...series.entries].reverse()
+        : series.entries
+      const firstGameTeams = getPlayoffMatchupTeams(renderedSeriesEntries[0].game)
 
       rows.push({
         type: "group",
-        key: `playoff-round-${roundIndex}-${seriesIndex}-group`,
+        key: `playoff-round-${roundIndex}-${series.seriesIndex}-group`,
         label: getPlayoffRoundLabel(roundIndex, firstGameTeams.playerTeam?.conference),
         count: series.entries.length,
       })
 
-      series.entries.forEach(({ game, index }) => {
+      renderedSeriesEntries.forEach(({ game, index }) => {
         rows.push({
           type: "game",
-          key: `playoff-round-${roundIndex}-${seriesIndex}-${getGameLogKey(game, index)}-row`,
+          key: `playoff-round-${roundIndex}-${series.seriesIndex}-${getGameLogKey(game, index)}-row`,
           game,
           index,
         })
@@ -765,11 +942,15 @@ export default function PlayerInfo() {
       if (seriesAverages) {
         rows.push({
           type: "groupAverage",
-          key: `playoff-round-${roundIndex}-${seriesIndex}-avg`,
+          key: `playoff-round-${roundIndex}-${series.seriesIndex}-avg`,
           averages: seriesAverages,
         })
       }
     })
+
+    if (dateSortDirection === "desc") {
+      pushPlayInRows()
+    }
 
     return rows
   }
@@ -968,9 +1149,10 @@ export default function PlayerInfo() {
   const activePostSeasonGameLog = isPostSeason
     ? [...activeSeasonGameLog, ...activePlayInSeasonGameLog]
     : activeSeasonGameLog
+  const sortedActiveSeasonGameLogEntries = getSortedGameLogEntries(activeSeasonGameLog, gameLogDateSortDirection)
   const groupedGameLogRows = isPostSeason
-    ? getPostSeasonGameLogRows(activePlayInSeasonGameLog, activeSeasonGameLog)
-    : getGroupedGameLogRows(activeSeasonGameLog, splitMode)
+    ? getPostSeasonGameLogRows(activePlayInSeasonGameLog, activeSeasonGameLog, gameLogDateSortDirection)
+    : getGroupedGameLogRows(sortedActiveSeasonGameLogEntries, splitMode)
   const totalDisplayedGameLogCount = isPostSeason
     ? activePlayInSeasonGameLog.length + activeSeasonGameLog.length
     : activeSeasonGameLog.length
@@ -1059,6 +1241,10 @@ export default function PlayerInfo() {
         </button>
       </div>
     )
+  }
+
+  function toggleGameLogDateSortDirection() {
+    setGameLogDateSortDirection(currentDirection => currentDirection === "asc" ? "desc" : "asc")
   }
 
   const primaryStats = [
@@ -1172,6 +1358,8 @@ export default function PlayerInfo() {
 
   const activeLastGameIndex = findGameLogIndex(activeLastGame)
   const playerName = data?.name || "Player"
+  const playerTeamName = getExpandedTeamName(data?.team) || "-"
+  const playerTeamLogoUrl = getTeamLogoUrl(data?.team)
   const playerHeadshotUrl = data?.headshot_url || `https://cdn.nba.com/headshots/nba/latest/1040x760/${normalizedPlayerId}.png`
 
   return (
@@ -1229,7 +1417,21 @@ export default function PlayerInfo() {
                       {playerName}
                     </h1>
                     <p className="mt-2 text-sm text-slate-300 sm:text-base">
-                      {isPostSeason ? "Post-Season" : "Season"} {activeSeason || "-"} • {formatNumber(activeSeasonStats?.gp, 0)} games played
+                      {isPostSeason ? "PS" : "Season"} {activeSeason || "-"} • {formatNumber(activeSeasonStats?.gp, 0)} games played
+                    </p>
+                    <p className="mt-1 inline-flex flex-wrap items-center justify-center gap-2 text-sm text-slate-300 sm:justify-start sm:text-base">
+                      <span>Plays for: {playerTeamName}</span>
+                      {playerTeamLogoUrl ? (
+                        <img
+                          src={playerTeamLogoUrl}
+                          alt={`${playerTeamName} logo`}
+                          className="h-6 w-6 object-contain"
+                          loading="lazy"
+                          onError={event => {
+                            event.currentTarget.style.display = "none"
+                          }}
+                        />
+                      ) : null}
                     </p>
                   </div>
                 </div>
@@ -1455,8 +1657,8 @@ export default function PlayerInfo() {
                         </h2>
                         <p className="mt-2 text-sm text-slate-300">
                           {isPostSeason
-                            ? "PlayIn and playoff rounds are grouped in progression order."
-                            : "Full season game log with the expanded box score breakdown for each game."}
+                            ? "Full postseason game logs with the expanded box score breakdown for each game."
+                            : "Full season game logs with the expanded box score breakdown for each game."}
                         </p>
                       </div>
 
@@ -1510,7 +1712,22 @@ export default function PlayerInfo() {
                           <table className="game-log-table min-w-full w-max text-left text-sm text-slate-200">
                             <thead className="bg-white/5 text-xs uppercase tracking-[0.18em] text-slate-400">
                               <tr>
-                                <th className="px-4 py-3 font-medium">Date</th>
+                                <th
+                                  className="px-4 py-3 font-medium"
+                                  aria-sort={gameLogDateSortDirection === "asc" ? "ascending" : "descending"}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={toggleGameLogDateSortDirection}
+                                    className="inline-flex items-center gap-1 text-left font-medium uppercase tracking-[0.18em] text-slate-400 transition-colors duration-200 hover:text-white focus:outline-none focus-visible:text-white"
+                                    aria-label={`Sort game logs by date ${gameLogDateSortDirection === "asc" ? "newest first" : "oldest first"}`}
+                                  >
+                                    Date
+                                    <span aria-hidden="true" className="text-[0.65rem] leading-none">
+                                      {gameLogDateSortDirection === "asc" ? "↑" : "↓"}
+                                    </span>
+                                  </button>
+                                </th>
                                 <th className="px-4 py-3 font-medium">Matchup</th>
                                 <th className="px-4 py-3 font-medium">Result</th>
                                 <th className="px-4 py-3 font-medium">MIN</th>

@@ -11,6 +11,69 @@ import {
 const CONTEXT_MENU_WIDTH = 224
 const CONTEXT_MENU_PADDING = 16
 
+function getGameTimestamp(game) {
+  const rawDate = game?.game_date || game?.date
+
+  if (!rawDate) {
+    return null
+  }
+
+  const timestamp = new Date(rawDate).getTime()
+
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+function getGameDisplayDate(game) {
+  return game?.date || game?.game_date || "Date unavailable"
+}
+
+function getFirstGameLogEntry(games) {
+  return Array.isArray(games) && games.length > 0 ? games[0] : null
+}
+
+function getFirstSeasonGameLogEntry(seasonGameLogs) {
+  if (!seasonGameLogs || typeof seasonGameLogs !== "object") {
+    return null
+  }
+
+  return Object.values(seasonGameLogs)
+    .flatMap(games => (Array.isArray(games) ? games : []))
+    .sort((leftGame, rightGame) => (getGameTimestamp(rightGame) || 0) - (getGameTimestamp(leftGame) || 0))[0] || null
+}
+
+function getLastGameDisplay(summary) {
+  const regularLastGame = summary?.last_game || null
+  const postseasonCandidates = [
+    summary?.playoff_last_game,
+    summary?.playin_last_game,
+    getFirstGameLogEntry(summary?.playoff_season_game_log),
+    getFirstGameLogEntry(summary?.playin_season_game_log),
+    getFirstSeasonGameLogEntry(summary?.playoff_season_game_logs),
+    getFirstSeasonGameLogEntry(summary?.playin_season_game_logs),
+  ].filter(Boolean)
+  const postseasonLastGame = postseasonCandidates
+    .sort((leftGame, rightGame) => (getGameTimestamp(rightGame) || 0) - (getGameTimestamp(leftGame) || 0))[0] || null
+
+  if (!postseasonLastGame) {
+    return regularLastGame ? { game: regularLastGame, isPostseason: false } : null
+  }
+
+  if (!regularLastGame) {
+    return { game: postseasonLastGame, isPostseason: true }
+  }
+
+  const postseasonTimestamp = getGameTimestamp(postseasonLastGame)
+  const regularTimestamp = getGameTimestamp(regularLastGame)
+
+  if (postseasonTimestamp != null && regularTimestamp != null) {
+    return postseasonTimestamp > regularTimestamp
+      ? { game: postseasonLastGame, isPostseason: true }
+      : { game: regularLastGame, isPostseason: false }
+  }
+
+  return { game: regularLastGame, isPostseason: false }
+}
+
 export default function PlayerSummaryCard({
   player,
   onRemoved,
@@ -35,6 +98,8 @@ export default function PlayerSummaryCard({
   const [notCached, setNotCached] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const displaySeasonStats = summary?.season_stats_by_season?.[summary?.season] || summary?.season_stats
+  const lastGameDisplay = getLastGameDisplay(summary)
+  const lastGame = lastGameDisplay?.game || null
 
   useEffect(() => {
     const cachedSummary = readPlayerSummaryCache(player.id)
@@ -357,20 +422,31 @@ export default function PlayerSummaryCard({
             </div>
           </div>
 
-          {summary.last_game && (
+          {lastGame && (
             <button
               onClick={event => {
                 event.stopPropagation()
                 setContextMenu(null)
-                navigate(`/player/${player.id}?tab=games&season=${encodeURIComponent(summary.season)}`)
+                const gameLogParams = new URLSearchParams({
+                  tab: "games",
+                  season: summary.season,
+                })
+
+                if (lastGameDisplay.isPostseason) {
+                  gameLogParams.set("postseason", "1")
+                }
+
+                navigate(`/player/${player.id}?${gameLogParams.toString()}`)
               }}
               className="mt-4 w-full max-w-[13.5rem] rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-emerald-400/10 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-300/25 hover:from-blue-500/15 hover:to-emerald-400/15"
             >
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-100">Last Game</p>
-              <p className="mt-2 text-sm text-white">{summary.last_game.matchup}</p>
-              <p className="mt-1 text-xs text-slate-300">{summary.last_game.date}</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-100">
+                {lastGameDisplay.isPostseason ? "Last Game - PS" : "Last Game"}
+              </p>
+              <p className="mt-2 text-sm text-white">{lastGame.matchup}</p>
+              <p className="mt-1 text-xs text-slate-300">{getGameDisplayDate(lastGame)}</p>
               <p className="mt-3 text-sm text-slate-200">
-                {formatNumber(summary.last_game.pts, 0)} PTS / {formatNumber(summary.last_game.ast, 0)} AST / {formatNumber(summary.last_game.reb, 0)} REB
+                {formatNumber(lastGame.pts, 0)} PTS / {formatNumber(lastGame.ast, 0)} AST / {formatNumber(lastGame.reb, 0)} REB
               </p>
             </button>
           )}
