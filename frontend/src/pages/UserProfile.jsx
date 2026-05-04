@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import { API_BASE } from "../api"
@@ -73,6 +73,30 @@ function getProfileStorageKey(email, token) {
   return token ? `netric:profile:${token}` : null
 }
 
+function getNotificationStorageKey(email, token) {
+  if (email && email !== "Unknown email") {
+    return `netric:popup-cleared-notifications:${email}`
+  }
+
+  return token ? `netric:popup-cleared-notifications:${token}` : null
+}
+
+function getLegacyNotificationStorageKey(email, token) {
+  if (email && email !== "Unknown email") {
+    return `netric:cleared-notifications:${email}`
+  }
+
+  return token ? `netric:cleared-notifications:${token}` : null
+}
+
+function getClickedNotificationStorageKey(email, token) {
+  if (email && email !== "Unknown email") {
+    return `netric:clicked-notifications:${email}`
+  }
+
+  return token ? `netric:clicked-notifications:${token}` : null
+}
+
 function readStoredProfile(email, token) {
   if (typeof window === "undefined") {
     return null
@@ -118,12 +142,179 @@ function writeStoredProfile(email, token, profile) {
   }
 }
 
+function readClearedNotificationIds(email, token) {
+  if (typeof window === "undefined") {
+    return []
+  }
+
+  const cacheKey = getNotificationStorageKey(email, token)
+
+  if (!cacheKey) {
+    return []
+  }
+
+  try {
+    const rawIds = window.localStorage.getItem(cacheKey)
+
+    if (!rawIds) {
+      return []
+    }
+
+    const ids = JSON.parse(rawIds)
+
+    return Array.isArray(ids) ? ids.filter(Boolean).map(String) : []
+  } catch (error) {
+    console.error("Failed to read cleared notifications", error)
+    return []
+  }
+}
+
+function writeClearedNotificationIds(email, token, notificationIds) {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const cacheKey = getNotificationStorageKey(email, token)
+
+  if (!cacheKey) {
+    return false
+  }
+
+  try {
+    window.localStorage.setItem(cacheKey, JSON.stringify([...new Set(notificationIds.map(String))]))
+    return true
+  } catch (error) {
+    console.error("Failed to save cleared notifications", error)
+    return false
+  }
+}
+
+function readClickedNotificationIds(email, token) {
+  if (typeof window === "undefined") {
+    return []
+  }
+
+  const cacheKey = getClickedNotificationStorageKey(email, token)
+  const legacyCacheKey = getLegacyNotificationStorageKey(email, token)
+
+  if (!cacheKey) {
+    return []
+  }
+
+  try {
+    const rawIds = window.localStorage.getItem(cacheKey)
+    const rawLegacyIds = legacyCacheKey ? window.localStorage.getItem(legacyCacheKey) : null
+    const notificationIds = []
+
+    if (rawIds) {
+      const ids = JSON.parse(rawIds)
+
+      if (Array.isArray(ids)) {
+        notificationIds.push(...ids)
+      }
+    }
+
+    if (rawLegacyIds) {
+      const legacyIds = JSON.parse(rawLegacyIds)
+
+      if (Array.isArray(legacyIds)) {
+        notificationIds.push(...legacyIds)
+      }
+    }
+
+    return [...new Set(notificationIds.filter(Boolean).map(String))]
+  } catch (error) {
+    console.error("Failed to read clicked notifications", error)
+    return []
+  }
+}
+
+function writeClickedNotificationIds(email, token, notificationIds) {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const cacheKey = getClickedNotificationStorageKey(email, token)
+
+  if (!cacheKey) {
+    return false
+  }
+
+  try {
+    window.localStorage.setItem(cacheKey, JSON.stringify([...new Set(notificationIds.map(String))]))
+    return true
+  } catch (error) {
+    console.error("Failed to save clicked notifications", error)
+    return false
+  }
+}
+
 function normalizeProfile(data, fallbackUsername) {
   return {
     username: data?.username || fallbackUsername,
     image: data?.profile_image || data?.image || null,
     hasProfile: Boolean(data?.has_profile),
   }
+}
+
+function formatNotificationTime(value) {
+  if (!value) {
+    return ""
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function getNotificationIdentity(notification) {
+  if (notification?.id !== undefined && notification?.id !== null) {
+    return String(notification.id)
+  }
+
+  const compositeId = [
+    notification?.type,
+    notification?.player_id,
+    notification?.comment_id,
+    notification?.reply_id,
+    notification?.actor_username,
+    notification?.created_at,
+  ].filter(value => value !== undefined && value !== null).join(":")
+
+  if (compositeId) {
+    return compositeId
+  }
+
+  try {
+    return JSON.stringify(notification)
+  } catch {
+    return ""
+  }
+}
+
+function isUnreadNotification(notification) {
+  if (notification?.read_at) {
+    return false
+  }
+
+  if (notification?.is_read !== undefined) {
+    return !notification.is_read
+  }
+
+  if (notification?.read !== undefined) {
+    return !notification.read
+  }
+
+  return true
 }
 
 function readFileAsDataUrl(file) {
@@ -189,8 +380,15 @@ export default function UserProfile() {
   const [passwordError, setPasswordError] = useState(null)
   const [showPasswordFields, setShowPasswordFields] = useState(false)
   const [favorites, setFavorites] = useState(EMPTY_FAVORITES)
+  const [notifications, setNotifications] = useState([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationsError, setNotificationsError] = useState(null)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [clearedNotificationIds, setClearedNotificationIds] = useState(() => readClearedNotificationIds(email, token))
+  const [clickedNotificationIds, setClickedNotificationIds] = useState(() => readClickedNotificationIds(email, token))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const notificationsMenuRef = useRef(null)
 
   useEffect(() => {
     const localProfile = readStoredProfile(email, token)
@@ -204,6 +402,8 @@ export default function UserProfile() {
     setDraftImage(storedProfile.image || null)
     setEditingProfile(false)
     setProfileMessage(null)
+    setClearedNotificationIds(readClearedNotificationIds(email, token))
+    setClickedNotificationIds(readClickedNotificationIds(email, token))
 
     if (!token) {
       return undefined
@@ -318,6 +518,80 @@ export default function UserProfile() {
     }
   }, [navigate, token])
 
+  useEffect(() => {
+    if (!token) {
+      return undefined
+    }
+
+    let ignore = false
+
+    setNotificationsLoading(true)
+    setNotificationsError(null)
+
+    axios
+      .get(`${API_BASE}/profile/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then(res => {
+        if (ignore) {
+          return
+        }
+
+        setNotifications(Array.isArray(res.data?.notifications) ? res.data.notifications : [])
+      })
+      .catch(err => {
+        if (ignore) {
+          return
+        }
+
+        if (err?.response?.status === 401) {
+          window.localStorage.removeItem("token")
+          navigate("/login")
+          return
+        }
+
+        console.error(err)
+        setNotificationsError("Unable to load notifications right now.")
+      })
+      .finally(() => {
+        if (!ignore) {
+          setNotificationsLoading(false)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [navigate, token])
+
+  useEffect(() => {
+    if (!isNotificationsOpen || typeof window === "undefined") {
+      return undefined
+    }
+
+    function handleOutsideClick(event) {
+      if (!notificationsMenuRef.current || notificationsMenuRef.current.contains(event.target)) {
+        return
+      }
+
+      setIsNotificationsOpen(false)
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsNotificationsOpen(false)
+      }
+    }
+
+    window.addEventListener("mousedown", handleOutsideClick)
+    window.addEventListener("keydown", handleEscape)
+
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick)
+      window.removeEventListener("keydown", handleEscape)
+    }
+  }, [isNotificationsOpen])
+
   const totalFavorites = favorites.players.length + favorites.teams.length + favorites.stats.length
   const favoriteSections = [
     { label: "Players", value: favorites.players.length, color: "from-blue-500/20 to-cyan-400/10", text: "text-blue-100" },
@@ -327,6 +601,18 @@ export default function UserProfile() {
   const favoritePlayers = favorites.players.slice(0, 5)
   const favoriteTeams = favorites.teams.slice(0, 5)
   const favoriteStats = favorites.stats.slice(0, 5)
+  const nonClearedNotifications = notifications.filter(notification => {
+    const notificationId = getNotificationIdentity(notification)
+
+    return !notificationId || !clearedNotificationIds.includes(notificationId)
+  })
+  const unreadNotifications = notifications.filter(notification => {
+    const notificationId = getNotificationIdentity(notification)
+
+    return isUnreadNotification(notification) && (!notificationId || !clickedNotificationIds.includes(notificationId))
+  })
+  const notificationCount = unreadNotifications.length
+  const nonClearedNotificationCount = nonClearedNotifications.length
   const username = editableProfile.username || defaultUsername
   const profileImage = editableProfile.image
 
@@ -412,6 +698,34 @@ export default function UserProfile() {
   function handleLogout() {
     window.localStorage.removeItem("token")
     navigate("/login")
+  }
+
+  function handleClearNotifications() {
+    const notificationIds = nonClearedNotifications.map(getNotificationIdentity).filter(Boolean)
+    const nextClearedNotificationIds = [...new Set([...clearedNotificationIds, ...notificationIds])]
+
+    setClearedNotificationIds(nextClearedNotificationIds)
+    writeClearedNotificationIds(email, token, nextClearedNotificationIds)
+  }
+
+  function handleNotificationClick(notification) {
+    const notificationId = getNotificationIdentity(notification)
+
+    if (notificationId) {
+      const nextClickedNotificationIds = [...new Set([...clickedNotificationIds, notificationId])]
+
+      setClickedNotificationIds(nextClickedNotificationIds)
+      writeClickedNotificationIds(email, token, nextClickedNotificationIds)
+    }
+
+    setIsNotificationsOpen(false)
+
+    if (notification.reply_id) {
+      navigate(`/player/${notification.player_id}/comments/${notification.comment_id}/replies/${notification.reply_id}`)
+      return
+    }
+
+    navigate(`/player/${notification.player_id}?tab=comments`)
   }
 
   async function handleChangePassword(event) {
@@ -506,12 +820,109 @@ export default function UserProfile() {
             </div>
 
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <button
-                onClick={() => navigate("/search")}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-100"
-              >
-                Search Players
-              </button>
+              <div ref={notificationsMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen(current => !current)}
+                  className="relative w-full rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15 sm:w-auto"
+                  aria-label={`Notifications${notificationCount ? `, ${notificationCount}` : ""}`}
+                >
+                  Notifications
+                  {notificationCount > 0 && (
+                    <span className="ml-2 inline-flex min-w-6 items-center justify-center rounded-full bg-blue-400 px-2 py-0.5 text-xs font-semibold text-slate-950">
+                      {notificationCount}
+                    </span>
+                  )}
+                </button>
+
+                {isNotificationsOpen && (
+                  <div className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl shadow-black/35 backdrop-blur-xl">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Notifications</p>
+                      <div className="flex items-center gap-2">
+                        {nonClearedNotificationCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearNotifications}
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-slate-200 transition-colors duration-200 hover:bg-white/10 hover:text-white"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-300">
+                          {nonClearedNotificationCount}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 max-h-96 overflow-y-auto pr-1">
+                      {notificationsLoading ? (
+                        <div className="rounded-xl border border-dashed border-white/12 bg-slate-900/50 p-5 text-center">
+                          <div className="mx-auto mb-3 h-8 w-8 rounded-full border-4 border-blue-400/30 border-t-blue-300 animate-spin" />
+                          <p className="text-sm text-slate-200">Loading notifications</p>
+                        </div>
+                      ) : notificationsError ? (
+                        <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                          {notificationsError}
+                        </div>
+                      ) : nonClearedNotifications.length > 0 ? (
+                        <div className="grid gap-2">
+                          {nonClearedNotifications.map((notification, index) => (
+                            <button
+                              key={getNotificationIdentity(notification) || `notification-${index}`}
+                              type="button"
+                              onClick={() => handleNotificationClick(notification)}
+                              className="w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition-colors duration-200 hover:bg-white/[0.08]"
+                            >
+                              <div className="flex gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-blue-400/15 text-xs font-semibold text-blue-100">
+                                  {notification.actor_profile_image ? (
+                                    <img
+                                      src={notification.actor_profile_image}
+                                      alt={`${notification.actor_username || "User"} profile`}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    getInitials(notification.actor_username)
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm leading-5 text-slate-200">
+                                    <span className="font-semibold text-white">{notification.actor_username || "Netric User"}</span>
+                                    {notification.type === "comment_reply"
+                                      ? ` replied to your comment on ${notification.player_name}.`
+                                      : notification.type === "reply_like"
+                                        ? ` liked your reply on ${notification.player_name}.`
+                                        : ` liked your comment on ${notification.player_name}.`}
+                                  </p>
+                                  {notification.overflow_count > 0 && (
+                                    <p className="mt-1 text-xs text-blue-200">
+                                      +{notification.overflow_count} more likes on this comment
+                                    </p>
+                                  )}
+                                  <p className="mt-1 truncate text-xs text-slate-500">
+                                    {notification.type === "comment_reply"
+                                      ? notification.reply_text
+                                      : notification.comment_text}
+                                  </p>
+                                  {notification.created_at && (
+                                    <p className="mt-2 text-xs text-slate-500">{formatNotificationTime(notification.created_at)}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-white/12 bg-slate-900/50 p-5 text-center">
+                          <p className="text-sm font-medium text-white">No notifications</p>
+                          <p className="mt-1 text-xs text-slate-400">Replies and likes on your comments will appear here.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setDraftUsername(username)

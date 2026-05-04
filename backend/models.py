@@ -31,3 +31,8 @@ class PlayerCommentRequest(BaseModel):
     text: str
     username: str | None = None
     profile_image: str | None = None
+
+class PlayerCommentReplyRequest(BaseModel):
+    text: str
+    username: str | None = None
+    profile_image: str | None = None

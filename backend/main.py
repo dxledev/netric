@@ -5,7 +5,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import AuthRequest, ChangePasswordRequest, PlayerCommentRequest, UserProfileRequest
+from models import AuthRequest, ChangePasswordRequest, PlayerCommentReplyRequest, PlayerCommentRequest, UserProfileRequest
 from auth import (
     register_user,
     login_user,
@@ -13,12 +13,19 @@ from auth import (
     get_user_profile,
     update_user_profile,
     get_user_favorites,
+    get_user_notifications,
     add_favorite_player,
     remove_favorite_player,
     get_player_comments,
+    get_player_reply_thread,
     get_trending_player_comments,
     add_player_comment,
-    delete_player_comment
+    add_player_comment_reply,
+    add_player_nested_reply,
+    delete_player_comment,
+    delete_player_comment_reply,
+    toggle_player_comment_like,
+    toggle_player_comment_reply_like
 )
 
 from database import fetch_queue_collection, player_cache_collection
@@ -112,6 +119,12 @@ def save_profile(data: UserProfileRequest, authorization: str = Header(None)):
 def favorites(authorization: str = Header(None)):
     return get_user_favorites(authorization)
 
+
+@app.get("/profile/notifications")
+@app.get("/api/profile/notifications")
+def profile_notifications(authorization: str = Header(None)):
+    return get_user_notifications(authorization)
+
 @app.post("/favorite/players")
 @app.post("/api/favorite/players")
 def favorite_player(data: dict, authorization: str = Header(None)):
@@ -161,6 +174,53 @@ def trending_player_comments(hours: int = 24, limit: int = 6):
 @app.post("/api/player/{player_id}/comments")
 def create_player_comment(player_id: int, data: PlayerCommentRequest, authorization: str = Header(None)):
     return add_player_comment(player_id, data, authorization)
+
+
+@app.post("/player/{player_id}/comments/{comment_id}/like")
+@app.post("/api/player/{player_id}/comments/{comment_id}/like")
+def like_player_comment(player_id: int, comment_id: str, authorization: str = Header(None)):
+    return toggle_player_comment_like(player_id, comment_id, authorization)
+
+
+@app.post("/player/{player_id}/comments/{comment_id}/replies")
+@app.post("/api/player/{player_id}/comments/{comment_id}/replies")
+def create_player_comment_reply(
+    player_id: int,
+    comment_id: str,
+    data: PlayerCommentReplyRequest,
+    authorization: str = Header(None)
+):
+    return add_player_comment_reply(player_id, comment_id, data, authorization)
+
+
+@app.post("/player/{player_id}/comments/{comment_id}/replies/{reply_id}/like")
+@app.post("/api/player/{player_id}/comments/{comment_id}/replies/{reply_id}/like")
+def like_player_comment_reply(player_id: int, comment_id: str, reply_id: str, authorization: str = Header(None)):
+    return toggle_player_comment_reply_like(player_id, comment_id, reply_id, authorization)
+
+
+@app.get("/player/{player_id}/comments/{comment_id}/replies/{reply_id}/thread")
+@app.get("/api/player/{player_id}/comments/{comment_id}/replies/{reply_id}/thread")
+def player_comment_reply_thread(player_id: int, comment_id: str, reply_id: str, authorization: str = Header(None)):
+    return get_player_reply_thread(player_id, comment_id, reply_id, authorization)
+
+
+@app.post("/player/{player_id}/comments/{comment_id}/replies/{reply_id}/replies")
+@app.post("/api/player/{player_id}/comments/{comment_id}/replies/{reply_id}/replies")
+def create_player_nested_reply(
+    player_id: int,
+    comment_id: str,
+    reply_id: str,
+    data: PlayerCommentReplyRequest,
+    authorization: str = Header(None)
+):
+    return add_player_nested_reply(player_id, comment_id, reply_id, data, authorization)
+
+
+@app.delete("/player/{player_id}/comments/{comment_id}/replies/{reply_id}")
+@app.delete("/api/player/{player_id}/comments/{comment_id}/replies/{reply_id}")
+def remove_player_comment_reply(player_id: int, comment_id: str, reply_id: str, authorization: str = Header(None)):
+    return delete_player_comment_reply(player_id, comment_id, reply_id, authorization)
 
 
 @app.delete("/player/{player_id}/comments/{comment_id}")

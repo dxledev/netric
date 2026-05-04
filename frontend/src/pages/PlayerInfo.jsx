@@ -218,7 +218,7 @@ export default function PlayerInfo() {
   const normalizedPlayerId = normalizePlayerId(id)
   const cachedSummary = readPlayerSummaryCache(id)
   const initialTab = searchParams.get("tab")
-  const [tab, setTab] = useState(initialTab === "games" ? "games" : "season")
+  const [tab, setTab] = useState(["games", "career", "advanced", "comments"].includes(initialTab) ? initialTab : "season")
   const [selectedGameLogSeason, setSelectedGameLogSeason] = useState("")
   const [selectedGameHighSeason, setSelectedGameHighSeason] = useState("all-time")
   const [splitMode, setSplitMode] = useState("default")
@@ -232,8 +232,14 @@ export default function PlayerInfo() {
   const [commentsLoading, setCommentsLoading] = useState(true)
   const [commentsError, setCommentsError] = useState("")
   const [commentDraft, setCommentDraft] = useState("")
+  const [replyDrafts, setReplyDrafts] = useState({})
+  const [activeReplyCommentId, setActiveReplyCommentId] = useState(null)
   const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [submittingReplyId, setSubmittingReplyId] = useState(null)
+  const [likingCommentId, setLikingCommentId] = useState(null)
+  const [likingReplyId, setLikingReplyId] = useState(null)
   const [deletingCommentId, setDeletingCommentId] = useState(null)
+  const [deletingReplyId, setDeletingReplyId] = useState(null)
   const [relativeTimeNow, setRelativeTimeNow] = useState(() => Date.now())
   const [currentUserProfile, setCurrentUserProfile] = useState(() => {
     const localProfile = readStoredProfile(currentUserEmail, token)
@@ -322,14 +328,7 @@ export default function PlayerInfo() {
 
     setIsPostSeason(nextIsPostSeason)
 
-    if (nextTab === "games") {
-      setTab("games")
-      return
-    }
-
-    if (nextTab === "career") {
-      setTab("career")
-    }
+    setTab(["games", "career", "advanced", "comments"].includes(nextTab) ? nextTab : "season")
   }, [searchParams])
 
   useEffect(() => {
@@ -518,6 +517,169 @@ export default function PlayerInfo() {
       setCommentsError(detail || "Unable to delete that comment right now.")
     } finally {
       setDeletingCommentId(null)
+    }
+  }
+
+  async function handleToggleCommentLike(commentId) {
+    if (!token) {
+      navigate("/login")
+      return
+    }
+
+    if (!commentId || likingCommentId === commentId) {
+      return
+    }
+
+    setLikingCommentId(commentId)
+    setCommentsError("")
+
+    try {
+      const res = await axios.post(`${API_BASE}/player/${id}/comments/${commentId}/like`, null, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      setComments(currentComments => currentComments.map(comment =>
+        comment.id === commentId
+          ? {
+              ...comment,
+              liked_by_current_user: Boolean(res.data?.liked),
+              like_count: Number(res.data?.like_count ?? comment.like_count ?? 0),
+            }
+          : comment
+      ))
+    } catch (error) {
+      console.error(error)
+      const detail = error.response?.data?.detail
+      setCommentsError(detail || "Unable to update that thumbs up right now.")
+    } finally {
+      setLikingCommentId(null)
+    }
+  }
+
+  async function handleReplySubmit(event, commentId) {
+    event.preventDefault()
+
+    const trimmedReply = String(replyDrafts[commentId] || "").trim()
+
+    if (!trimmedReply) {
+      return
+    }
+
+    if (!token) {
+      navigate("/login")
+      return
+    }
+
+    setSubmittingReplyId(commentId)
+    setCommentsError("")
+
+    try {
+      const res = await axios.post(
+        `${API_BASE}/player/${id}/comments/${commentId}/replies`,
+        {
+          text: trimmedReply,
+          username: currentUsername,
+          profile_image: currentProfileImage,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      const createdReply = res.data?.reply
+
+      if (createdReply) {
+        setComments(currentComments => currentComments.map(comment =>
+          comment.id === commentId
+            ? { ...comment, replies: [...(Array.isArray(comment.replies) ? comment.replies : []), createdReply] }
+            : comment
+        ))
+      }
+
+      setReplyDrafts(currentDrafts => ({ ...currentDrafts, [commentId]: "" }))
+      setActiveReplyCommentId(null)
+    } catch (error) {
+      console.error(error)
+      const detail = error.response?.data?.detail
+      setCommentsError(detail || "Unable to post that reply right now.")
+    } finally {
+      setSubmittingReplyId(null)
+    }
+  }
+
+  function handleCancelReply(commentId) {
+    setReplyDrafts(currentDrafts => ({ ...currentDrafts, [commentId]: "" }))
+    setActiveReplyCommentId(null)
+  }
+
+  async function handleToggleReplyLike(commentId, replyId) {
+    if (!token) {
+      navigate("/login")
+      return
+    }
+
+    if (!commentId || !replyId || likingReplyId === replyId) {
+      return
+    }
+
+    setLikingReplyId(replyId)
+    setCommentsError("")
+
+    try {
+      const res = await axios.post(`${API_BASE}/player/${id}/comments/${commentId}/replies/${replyId}/like`, null, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      setComments(currentComments => currentComments.map(comment =>
+        comment.id === commentId
+          ? {
+              ...comment,
+              replies: (Array.isArray(comment.replies) ? comment.replies : []).map(reply =>
+                reply.id === replyId
+                  ? {
+                      ...reply,
+                      liked_by_current_user: Boolean(res.data?.liked),
+                      like_count: Number(res.data?.like_count ?? reply.like_count ?? 0),
+                    }
+                  : reply
+              ),
+            }
+          : comment
+      ))
+    } catch (error) {
+      console.error(error)
+      const detail = error.response?.data?.detail
+      setCommentsError(detail || "Unable to update that thumbs up right now.")
+    } finally {
+      setLikingReplyId(null)
+    }
+  }
+
+  async function handleDeleteReply(commentId, replyId) {
+    if (!token || !commentId || !replyId) {
+      return
+    }
+
+    setDeletingReplyId(replyId)
+    setCommentsError("")
+
+    try {
+      await axios.delete(`${API_BASE}/player/${id}/comments/${commentId}/replies/${replyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setComments(currentComments => currentComments.map(comment =>
+        comment.id === commentId
+          ? {
+              ...comment,
+              replies: (Array.isArray(comment.replies) ? comment.replies : []).filter(reply => reply.id !== replyId),
+            }
+          : comment
+      ))
+    } catch (error) {
+      console.error(error)
+      const detail = error.response?.data?.detail
+      setCommentsError(detail || "Unable to delete that reply right now.")
+    } finally {
+      setDeletingReplyId(null)
     }
   }
 
@@ -2398,6 +2560,143 @@ export default function PlayerInfo() {
                                   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">
                                     {comment.text}
                                   </p>
+                                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleCommentLike(comment.id)}
+                                      disabled={likingCommentId === comment.id}
+                                      aria-label={comment.liked_by_current_user ? "Remove thumbs up" : "Give thumbs up"}
+                                      title={comment.liked_by_current_user ? "Remove thumbs up" : "Give thumbs up"}
+                                      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white/[0.04] px-2.5 text-xs font-medium transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                        comment.liked_by_current_user
+                                          ? "border-blue-300/50 text-blue-200"
+                                          : "border-white/10 text-slate-300 hover:bg-white/[0.08]"
+                                      }`}
+                                    >
+                                      <span aria-hidden="true" className="text-sm">
+                                        👍
+                                      </span>
+                                      <span>{Number(comment.like_count || 0)}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveReplyCommentId(currentId => currentId === comment.id ? null : comment.id)}
+                                      aria-label="Comment on this"
+                                      title="Comment on this"
+                                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-xs font-medium text-slate-300 transition-colors duration-300 hover:bg-white/[0.08]"
+                                    >
+                                      <span aria-hidden="true" className="text-sm text-slate-400">💬</span>
+                                      <span>{Array.isArray(comment.replies) ? comment.replies.length : 0}</span>
+                                    </button>
+                                  </div>
+
+                                  {activeReplyCommentId === comment.id && (
+                                    <form onSubmit={event => handleReplySubmit(event, comment.id)} className="mt-3">
+                                      <textarea
+                                        value={replyDrafts[comment.id] || ""}
+                                        onChange={event => setReplyDrafts(currentDrafts => ({
+                                          ...currentDrafts,
+                                          [comment.id]: event.target.value,
+                                        }))}
+                                        maxLength={600}
+                                        rows={3}
+                                        placeholder="Write a reply..."
+                                        className="w-full resize-none rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition-colors duration-300 placeholder:text-slate-500 focus:border-blue-300/50"
+                                      />
+                                      <div className="mt-2 flex items-center justify-between gap-3">
+                                        <p className="text-xs text-slate-500">{(replyDrafts[comment.id] || "").length}/600</p>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleCancelReply(comment.id)}
+                                            disabled={submittingReplyId === comment.id}
+                                            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors duration-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            type="submit"
+                                            disabled={submittingReplyId === comment.id || !String(replyDrafts[comment.id] || "").trim()}
+                                            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-950 transition-all duration-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
+                                          >
+                                          {submittingReplyId === comment.id ? "Posting" : "Post"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                  {Array.isArray(comment.replies) && comment.replies.length > 0 && (
+                                    <div className="mt-4 grid gap-3 border-l border-white/10 pl-3">
+                                      {comment.replies.map(reply => (
+                                        <div key={reply.id || `${reply.username}-${reply.created_at}`} className="rounded-xl bg-slate-950/35 p-3">
+                                          <div className="flex items-start gap-3">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-xs font-semibold text-white">
+                                              {reply.profile_image ? (
+                                                <img
+                                                  src={reply.profile_image}
+                                                  alt={`${reply.username || "User"} profile`}
+                                                  className="h-full w-full object-cover"
+                                                />
+                                              ) : (
+                                                getInitials(reply.username)
+                                              )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                  <p className="text-sm font-semibold text-white">{reply.username || "Netric User"}</p>
+                                                  <p className="text-xs text-slate-500">{formatRelativeTime(reply.created_at, relativeTimeNow)}</p>
+                                                </div>
+                                                {reply.can_delete && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteReply(comment.id, reply.id)}
+                                                    disabled={deletingReplyId === reply.id}
+                                                    className="rounded-lg border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-100 transition-colors duration-300 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                                  >
+                                                    {deletingReplyId === reply.id ? "Deleting" : "Delete"}
+                                                  </button>
+                                                )}
+                                              </div>
+                                              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">
+                                                {reply.text}
+                                              </p>
+                                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleToggleReplyLike(comment.id, reply.id)}
+                                                  disabled={likingReplyId === reply.id}
+                                                  aria-label={reply.liked_by_current_user ? "Remove thumbs up" : "Give thumbs up"}
+                                                  title={reply.liked_by_current_user ? "Remove thumbs up" : "Give thumbs up"}
+                                                  className={`inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white/[0.04] px-2.5 text-xs font-medium transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                                    reply.liked_by_current_user
+                                                      ? "border-blue-300/50 text-blue-200"
+                                                      : "border-white/10 text-slate-300 hover:bg-white/[0.08]"
+                                                  }`}
+                                                >
+                                                  <span aria-hidden="true" className="text-sm">
+                                                    👍
+                                                  </span>
+                                                  <span>{Number(reply.like_count || 0)}</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => navigate(`/player/${id}/comments/${comment.id}/replies/${reply.id}`)}
+                                                  aria-label="Open comment thread"
+                                                  title="Open comment thread"
+                                                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-xs font-medium text-slate-300 transition-colors duration-300 hover:bg-white/[0.08]"
+                                                >
+                                                  <span aria-hidden="true" className="text-sm text-slate-400">💬</span>
+                                                  <span>{Number(reply.reply_count || 0)}</span>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </article>
