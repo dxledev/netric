@@ -7,10 +7,11 @@ from fastapi import HTTPException
 from nba_api.stats.static import players
 
 from database import fetch_queue_collection, player_cache_collection
+from player_team_overrides import get_player_team_override
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 14
+SUMMARY_VERSION = 15
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -488,6 +489,11 @@ def build_player_summary_from_data(player_id: int, data: dict):
     team_name = str(latest.get("TEAM_NAME") or "").strip()
     team_abbreviation = str(latest.get("TEAM_ABBREVIATION") or "").strip()
     team_id = to_int(latest.get("TEAM_ID"), default=0)
+    team = get_player_team_override(player_id) or {
+        "id": team_id,
+        "name": team_name,
+        "abbreviation": team_abbreviation,
+    }
 
     season_stats_by_season = build_season_stats_by_season(career_stats)
     season_stats = season_stats_by_season.get(latest_season_id, build_season_stats(latest))
@@ -540,11 +546,7 @@ def build_player_summary_from_data(player_id: int, data: dict):
         "player_id": int(player_id),
         "summary_version": SUMMARY_VERSION,
         "name": data["name"],
-        "team": {
-            "id": team_id,
-            "name": team_name,
-            "abbreviation": team_abbreviation,
-        },
+        "team": team,
         "season": latest_season_id,
         "season_stats": season_stats,
         "season_stats_by_season": season_stats_by_season,
