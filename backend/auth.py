@@ -196,6 +196,16 @@ def update_user_profile(data, authorization: str = Header(None)):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
 
+    player_comments_collection.update_many(
+        {"email": email},
+        {
+            "$set": {
+                "username": username,
+                "profile_image": profile_image,
+            }
+        }
+    )
+
     return serialize_user_profile({
         "username": username,
         "profile_image": profile_image,
