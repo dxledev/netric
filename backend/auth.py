@@ -62,18 +62,50 @@ def format_comment_timestamp(created_at):
     return created_at.isoformat()
 
 
-def serialize_player_comment(comment, current_email=None):
+def serialize_player_comment(comment, current_email=None, author_profile=None):
     created_at = comment.get("created_at")
     author_email = comment.get("email")
+    author_profile = author_profile or {}
+    username = author_profile.get("username") or comment.get("username") or "Netric User"
+    profile_image = (
+        author_profile["profile_image"]
+        if "profile_image" in author_profile
+        else comment.get("profile_image")
+    )
 
     return {
         "id": str(comment.get("_id")),
         "player_id": comment.get("player_id"),
         "text": comment.get("text", ""),
-        "username": comment.get("username") or "Netric User",
-        "profile_image": comment.get("profile_image"),
+        "username": username,
+        "profile_image": profile_image,
         "created_at": format_comment_timestamp(created_at),
         "can_delete": bool(current_email and author_email == current_email),
+    }
+
+
+def get_author_profiles_for_comments(comments):
+    emails = sorted({
+        normalize_email(comment.get("email"))
+        for comment in comments
+        if comment.get("email")
+    })
+
+    if not emails:
+        return {}
+
+    users = users_collection.find(
+        {"email": {"$in": emails}},
+        {"_id": 0, "email": 1, "username": 1, "profile_image": 1}
+    )
+
+    return {
+        normalize_email(user.get("email")): {
+            "username": user.get("username"),
+            "profile_image": user.get("profile_image"),
+        }
+        for user in users
+        if user.get("email")
     }
 
 
@@ -288,11 +320,21 @@ def remove_favorite_player(player_id: int, authorization: str):
 
 def get_player_comments(player_id: int, authorization: str = Header(None)):
     current_email = get_optional_email_from_authorization(authorization)
-    comments = player_comments_collection.find(
+    comments = list(player_comments_collection.find(
         {"player_id": player_id}
-    ).sort("created_at", -1).limit(100)
+    ).sort("created_at", -1).limit(100))
+    author_profiles = get_author_profiles_for_comments(comments)
 
-    return {"comments": [serialize_player_comment(comment, current_email) for comment in comments]}
+    return {
+        "comments": [
+            serialize_player_comment(
+                comment,
+                current_email,
+                author_profiles.get(normalize_email(comment.get("email")))
+            )
+            for comment in comments
+        ]
+    }
 
 
 def get_trending_player_comments(hours: int = 24, limit: int = 6):
