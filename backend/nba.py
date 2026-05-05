@@ -11,7 +11,7 @@ from player_team_overrides import get_player_team_override
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 15
+SUMMARY_VERSION = 16
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
@@ -422,12 +422,12 @@ def cached_summary_matches_postseason_data(summary, data):
     playoff_log_season_ids = get_raw_log_season_ids(data.get("playoff_season_game_logs"))
     playin_log_season_ids = get_raw_log_season_ids(data.get("playin_season_game_logs"))
     playoff_stat_season_ids = get_active_stat_season_ids(data.get("playoff_career_stats"))
-    postseason_stat_season_ids = playoff_stat_season_ids | playoff_log_season_ids | playin_log_season_ids
+    playoff_stat_season_ids = playoff_stat_season_ids | playoff_log_season_ids
 
     return (
         has_all_season_ids(summary, "available_playoff_game_log_seasons", playoff_log_season_ids)
         and has_all_season_ids(summary, "available_playin_game_log_seasons", playin_log_season_ids)
-        and has_all_season_ids(summary, "available_playoff_stat_seasons", postseason_stat_season_ids)
+        and has_all_season_ids(summary, "available_playoff_stat_seasons", playoff_stat_season_ids)
     )
 
 
@@ -509,7 +509,7 @@ def build_player_summary_from_data(player_id: int, data: dict):
         build_season_stats_by_season(playoff_career_stats)
         if not playoff_career_stats.empty
         else {},
-        combine_season_game_logs(playin_season_game_logs, playoff_season_game_logs),
+        playoff_season_game_logs,
     )
     playoff_latest_season_id = sort_season_ids(playoff_season_stats_by_season.keys())[0] if playoff_season_stats_by_season else None
     playoff_season_stats = (

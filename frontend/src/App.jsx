@@ -7,6 +7,7 @@ import Login from "./pages/Login"
 import Register from "./pages/Register"
 import PlayerInfo from "./pages/PlayerInfo"
 import PlayerReplyThread from "./pages/PlayerReplyThread"
+import PlayerComparison from "./pages/PlayerComparison"
 import GameSummary from "./pages/GameSummary"
 import StatHighs from "./pages/StatHighs"
 import { isAuthenticated } from "./auth"
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/profile" element={<UserProfile />} />
           <Route path="/search" element={<PlayerSearch />} />
+          <Route path="/compare" element={<PlayerComparison />} />
           <Route path="/player/:id" element={<PlayerInfo />} />
           <Route path="/player/:id/comments/:commentId/replies/:replyId" element={<PlayerReplyThread />} />
           <Route path="/player/:id/games/:gameKey" element={<GameSummary />} />

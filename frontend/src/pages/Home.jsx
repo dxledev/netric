@@ -680,6 +680,13 @@ export default function Home() {
                   </button>
 
                   <button
+                    onClick={() => navigate("/compare")}
+                    className="rounded-xl border border-emerald-300/25 bg-emerald-400/15 px-5 py-3 text-sm font-medium text-emerald-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-400/20"
+                  >
+                    Compare
+                  </button>
+
+                  <button
                     onClick={() => navigate("/profile")}
                     className="rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15"
                   >
