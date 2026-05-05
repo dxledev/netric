@@ -1860,7 +1860,7 @@ export default function PlayerInfo() {
                       {isPostSeason ? "PS" : "Season"} {activeSeason || "-"} • {formatNumber(activeSeasonStats?.gp, 0)} games played
                     </p>
                     <p className="mt-1 inline-flex flex-wrap items-center justify-center gap-2 text-sm text-slate-300 sm:justify-start sm:text-base">
-                      <span>Plays for: {playerTeamName}</span>
+                      <span>Team: {playerTeamName}</span>
                       {playerTeamLogoUrl ? (
                         <img
                           src={playerTeamLogoUrl}

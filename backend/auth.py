@@ -664,12 +664,34 @@ def get_trending_player_comments(hours: int = 24, limit: int = 6):
     bounded_limit = max(1, min(int(limit or 6), 20))
     since = datetime.now(timezone.utc) - timedelta(hours=bounded_hours)
 
-    trending_players = list(player_comments_collection.aggregate([
+    recent_players = list(player_comments_collection.aggregate([
         {"$match": {"created_at": {"$gte": since}}},
         {"$group": {"_id": "$player_id", "comment_count": {"$sum": 1}}},
         {"$sort": {"comment_count": -1, "_id": 1}},
         {"$limit": bounded_limit},
     ]))
+
+    trending_players = recent_players
+    recent_player_ids = {
+        player.get("_id")
+        for player in recent_players
+        if player.get("_id")
+    }
+
+    if len(trending_players) < bounded_limit:
+        all_time_players = list(player_comments_collection.aggregate([
+            {"$group": {"_id": "$player_id", "comment_count": {"$sum": 1}}},
+            {"$sort": {"comment_count": -1, "_id": 1}},
+            {"$limit": bounded_limit + len(recent_player_ids)},
+        ]))
+        fill_players = [
+            player
+            for player in all_time_players
+            if player.get("_id") and player.get("_id") not in recent_player_ids
+        ]
+        trending_players = (
+            trending_players + fill_players[:bounded_limit - len(trending_players)]
+        )
 
     players = []
 
