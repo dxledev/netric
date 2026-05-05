@@ -95,14 +95,28 @@ export default function PlayerComparison() {
   const [includePlayIn, setIncludePlayIn] = useState(false)
 
   const showPlayInToggle = true
-  const leftSeasonOptions = useMemo(
+  const leftAvailableSeasonOptions = useMemo(
     () => getSortedSeasonOptions(getAvailableComparisonSeasons(leftPlayer, postseason, includePlayIn)),
     [leftPlayer, postseason, includePlayIn]
   )
-  const rightSeasonOptions = useMemo(
+  const rightAvailableSeasonOptions = useMemo(
     () => getSortedSeasonOptions(getAvailableComparisonSeasons(rightPlayer, postseason, includePlayIn)),
     [rightPlayer, postseason, includePlayIn]
   )
+  const comparisonScopeSeasonOptions = useMemo(
+    () => getSortedSeasonOptions([
+      ...leftAvailableSeasonOptions,
+      ...rightAvailableSeasonOptions,
+    ]),
+    [leftAvailableSeasonOptions, rightAvailableSeasonOptions]
+  )
+  const canUseComparisonSeasonContext = postseason || includePlayIn
+  const leftSeasonOptions = leftAvailableSeasonOptions.length > 0 || !leftPlayer || !canUseComparisonSeasonContext
+    ? leftAvailableSeasonOptions
+    : comparisonScopeSeasonOptions
+  const rightSeasonOptions = rightAvailableSeasonOptions.length > 0 || !rightPlayer || !canUseComparisonSeasonContext
+    ? rightAvailableSeasonOptions
+    : comparisonScopeSeasonOptions
 
   useEffect(() => {
     if (leftSeasonOptions.length === 0) {
