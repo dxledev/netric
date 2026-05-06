@@ -1,5 +1,9 @@
 import os
+import re
 import time
+from html.parser import HTMLParser
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -33,6 +37,21 @@ TEAM_STATIC_BY_ID = {
     int(team["id"]): team
     for team in teams.get_teams()
 }
+BBR_REQUEST_DELAY_SECONDS = float(os.getenv("BBR_REQUEST_DELAY_SECONDS", "6"))
+BBR_TIMEOUT_SECONDS = int(os.getenv("BBR_TIMEOUT_SECONDS", "30"))
+BBR_BASE_URL = "https://www.basketball-reference.com"
+BBR_ABBREVIATION_BY_NBA_ABBREVIATION = {
+    "BKN": "BRK",
+    "CHA": "CHO",
+    "PHX": "PHO",
+}
+TEAM_NAME_ALIASES = {
+    "brooklyn nets": "Brooklyn Nets",
+    "charlotte hornets": "Charlotte Hornets",
+    "la clippers": "Los Angeles Clippers",
+    "los angeles clippers": "Los Angeles Clippers",
+    "phoenix suns": "Phoenix Suns",
+}
 
 
 def utc_now():
@@ -52,6 +71,128 @@ def get_current_season():
 def get_season_id_for_playoff_picture(season):
     start_year = str(season).split("-")[0]
     return f"2{start_year}"
+
+
+def get_bbr_season_year(season=None):
+    season = season or get_current_season()
+    return int(str(season).split("-")[0]) + 1
+
+
+class BasketballReferenceRateLimit(Exception):
+    def __init__(self, retry_after=None):
+        self.retry_after = retry_after
+        message = "Basketball Reference rate limit reached"
+        if retry_after:
+            message = f"{message}; retry after {retry_after} seconds"
+        super().__init__(message)
+
+
+class BBRTableParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows = []
+        self.current_row = None
+        self.current_cell = None
+        self.current_key = None
+        self.in_thead = False
+        self.skip_row = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "thead":
+            self.in_thead = True
+        elif tag == "tr":
+            row_class = attrs.get("class", "")
+            self.current_row = {}
+            self.skip_row = self.in_thead or "thead" in row_class
+        elif tag in {"td", "th"} and self.current_row is not None:
+            self.current_key = attrs.get("data-stat")
+            self.current_cell = []
+            if self.current_key and attrs.get("data-append-csv"):
+                self.current_row[f"{self.current_key}_id"] = attrs.get("data-append-csv")
+
+    def handle_data(self, data):
+        if self.current_cell is not None:
+            self.current_cell.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "thead":
+            self.in_thead = False
+        elif tag in {"td", "th"} and self.current_row is not None:
+            if self.current_key:
+                value = " ".join("".join(self.current_cell or []).split())
+                self.current_row[self.current_key] = value
+            self.current_cell = None
+            self.current_key = None
+        elif tag == "tr" and self.current_row is not None:
+            if not self.skip_row and any(self.current_row.values()):
+                self.rows.append(self.current_row)
+            self.current_row = None
+            self.skip_row = False
+
+
+def fetch_bbr_html(path):
+    url = f"{BBR_BASE_URL}{path}"
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; NetricTeamCache/1.0; +https://example.com)",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=BBR_TIMEOUT_SECONDS) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except HTTPError as error:
+        if error.code == 429:
+            retry_after = error.headers.get("Retry-After")
+            try:
+                retry_after = int(retry_after) if retry_after else None
+            except ValueError:
+                retry_after = None
+            raise BasketballReferenceRateLimit(retry_after=retry_after) from error
+        raise
+    except URLError as error:
+        raise RuntimeError(f"Basketball Reference request failed: {error}") from error
+
+
+def parse_bbr_table(html, table_id):
+    match = re.search(
+        rf"<table\b[^>]*\bid=[\"']{re.escape(table_id)}[\"'][\s\S]*?</table>",
+        html,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return []
+
+    parser = BBRTableParser()
+    parser.feed(match.group(0))
+    return parser.rows
+
+
+def clean_bbr_team_name(value):
+    return re.sub(r"\s+", " ", str(value or "").replace("*", "")).strip()
+
+
+def normalize_team_name_key(value):
+    return re.sub(r"[^a-z0-9]", "", clean_bbr_team_name(value).lower())
+
+
+def get_team_id_by_name(name):
+    clean_name = clean_bbr_team_name(name)
+    aliased_name = TEAM_NAME_ALIASES.get(clean_name.lower(), clean_name)
+    target_key = normalize_team_name_key(aliased_name)
+
+    for team in teams.get_teams():
+        if normalize_team_name_key(team["full_name"]) == target_key:
+            return int(team["id"])
+
+    return None
+
+
+def get_bbr_abbreviation(nba_abbreviation):
+    return BBR_ABBREVIATION_BY_NBA_ABBREVIATION.get(nba_abbreviation, nba_abbreviation)
 
 
 def run_with_retries(fetch_fn):
@@ -308,6 +449,181 @@ def normalize_standing_row(row):
     }
 
 
+def normalize_bbr_record(value):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return "0-0"
+    return raw_value.replace(" ", "")
+
+
+def normalize_bbr_streak(value):
+    raw_value = str(value or "").strip().upper()
+    if not raw_value:
+        return ""
+    return raw_value.replace(" ", "")
+
+
+def parse_bbr_games_back(value):
+    raw_value = str(value or "").strip()
+    if raw_value in {"", "-", "—"}:
+        return "0"
+    return raw_value
+
+
+def build_bbr_team_stats_row(base_row, opponent_row=None):
+    opponent_row = opponent_row or {}
+    return {
+        "gp": to_int(base_row.get("g")),
+        "pts": to_float(base_row.get("pts_per_g")),
+        "fg_pct": to_float(base_row.get("fg_pct")),
+        "fg3_pct": to_float(base_row.get("fg3_pct")),
+        "ft_pct": to_float(base_row.get("ft_pct")),
+        "ast": to_float(base_row.get("ast_per_g")),
+        "tov": to_float(base_row.get("tov_per_g")),
+        "oppg": to_float(opponent_row.get("pts_per_g")),
+        "ofg_pct": to_float(opponent_row.get("fg_pct")),
+        "o3fg_pct": to_float(opponent_row.get("fg3_pct")),
+        "blk": to_float(base_row.get("blk_per_g")),
+        "stl": to_float(base_row.get("stl_per_g")),
+        "reb": to_float(base_row.get("trb_per_g")),
+    }
+
+
+def build_bbr_standing_row(row, conference, rank, stats_by_team_id=None):
+    team_id = get_team_id_by_name(row.get("team_name"))
+    if not team_id:
+        return None
+
+    team = TEAM_STATIC_BY_ID.get(team_id, {})
+    stats = (stats_by_team_id or {}).get(team_id, {})
+    wins = to_int(row.get("wins"))
+    losses = to_int(row.get("losses"))
+
+    return {
+        "team_id": team_id,
+        "name": team.get("full_name") or clean_bbr_team_name(row.get("team_name")),
+        "abbreviation": team.get("abbreviation") or "",
+        "conference": conference,
+        "rank": rank,
+        "standing_label": f"{rank}{ordinal_suffix(rank)} {'EC' if conference == 'East' else 'WC'}",
+        "wins": wins,
+        "losses": losses,
+        "record": f"{wins}-{losses}",
+        "win_pct": to_float(row.get("win_loss_pct")),
+        "games_back": parse_bbr_games_back(row.get("gb")),
+        "l10": normalize_bbr_record(row.get("last_ten")),
+        "streak": normalize_bbr_streak(row.get("streak")),
+        "home_record": normalize_bbr_record(row.get("home_record")),
+        "away_record": normalize_bbr_record(row.get("road_record")),
+        "ppg": to_float(stats.get("pts")),
+        "oppg": to_float(stats.get("oppg")),
+        "postseason_eligible": rank <= 10,
+        "clinched_playoffs": rank <= 8,
+    }
+
+
+def calculate_bbr_ts_pct(row):
+    pts = to_float(row.get("pts_per_g"))
+    fga = to_float(row.get("fga_per_g"))
+    fta = to_float(row.get("fta_per_g"))
+    attempts = fga + 0.44 * fta
+    return round(pts / (2 * attempts), 3) if attempts > 0 else 0.0
+
+
+def normalize_bbr_player_stats(row):
+    gp = to_int(row.get("g"))
+    pts = to_float(row.get("pts_per_g"))
+    reb = to_float(row.get("trb_per_g"))
+    ast = to_float(row.get("ast_per_g"))
+    fga = to_float(row.get("fga_per_g"))
+    fta = to_float(row.get("fta_per_g"))
+
+    return {
+        "gp": gp,
+        "pts_total": round(pts * gp, 1),
+        "reb_total": round(reb * gp, 1),
+        "ast_total": round(ast * gp, 1),
+        "fga": round(fga * gp, 1),
+        "fta": round(fta * gp, 1),
+        "pts": pts,
+        "reb": reb,
+        "ast": ast,
+        "ts_pct": calculate_bbr_ts_pct(row),
+    }
+
+
+def index_bbr_player_stats(rows):
+    indexed = {}
+    for row in rows:
+        player_key = row.get("player_id") or normalize_team_name_key(row.get("player"))
+        if not player_key:
+            continue
+        indexed[player_key] = normalize_bbr_player_stats(row)
+    return indexed
+
+
+def build_bbr_players(roster_rows, regular_rows, postseason_rows):
+    regular_stats = index_bbr_player_stats(regular_rows)
+    postseason_stats = index_bbr_player_stats(postseason_rows)
+    players = []
+
+    for row in roster_rows:
+        player_key = row.get("player_id") or normalize_team_name_key(row.get("player"))
+        name = str(row.get("player") or "").strip()
+        if not player_key or not name:
+            continue
+
+        empty_stats = {
+            "gp": 0,
+            "pts_total": 0.0,
+            "reb_total": 0.0,
+            "ast_total": 0.0,
+            "fga": 0.0,
+            "fta": 0.0,
+            "pts": 0.0,
+            "reb": 0.0,
+            "ast": 0.0,
+            "ts_pct": 0.0,
+        }
+        players.append(
+            {
+                "player_id": player_key,
+                "name": name,
+                "jersey_number": str(row.get("number") or ""),
+                "position": str(row.get("pos") or ""),
+                "regular": regular_stats.get(player_key, empty_stats),
+                "postseason": postseason_stats.get(player_key, empty_stats),
+                "playin": empty_stats,
+            }
+        )
+
+    return players
+
+
+def build_bbr_last_game(games_rows):
+    completed_games = [
+        row
+        for row in games_rows
+        if str(row.get("game_result") or "").strip() in {"W", "L"}
+    ]
+    if not completed_games:
+        return None
+
+    game = completed_games[-1]
+    points = to_int(game.get("pts"))
+    opponent_points = to_int(game.get("opp_pts"))
+    location = "vs" if not str(game.get("game_location") or "").strip() else "@"
+    opponent = str(game.get("opp_name") or "").strip()
+
+    return {
+        "game_id": str(game.get("date_game") or ""),
+        "score": f"{points}-{opponent_points}",
+        "date": str(game.get("date_game") or ""),
+        "matchup": f"{location} {opponent}".strip(),
+        "outcome": str(game.get("game_result") or ""),
+    }
+
+
 def ordinal_suffix(value):
     if 10 <= value % 100 <= 20:
         return "th"
@@ -382,6 +698,171 @@ def fetch_playoff_picture(season):
     }
 
 
+def fetch_bbr_league_snapshot(season=None):
+    season = season or get_current_season()
+    bbr_year = get_bbr_season_year(season)
+    league_html = fetch_bbr_html(f"/leagues/NBA_{bbr_year}.html")
+    standings_html = fetch_bbr_html(f"/leagues/NBA_{bbr_year}_standings.html")
+
+    team_rows = parse_bbr_table(league_html, "per_game-team")
+    opponent_rows = parse_bbr_table(league_html, "per_game-opponent")
+    opponent_by_name = {
+        normalize_team_name_key(row.get("team")): row
+        for row in opponent_rows
+    }
+
+    stats_by_team_id = {}
+    for row in team_rows:
+        team_id = get_team_id_by_name(row.get("team"))
+        if not team_id:
+            continue
+        opponent_row = opponent_by_name.get(normalize_team_name_key(row.get("team")))
+        stats_by_team_id[team_id] = build_bbr_team_stats_row(row, opponent_row)
+
+    east_rows = []
+    west_rows = []
+    for conference, table_id, bucket in [
+        ("East", "confs_standings_E", east_rows),
+        ("West", "confs_standings_W", west_rows),
+    ]:
+        parsed_rows = parse_bbr_table(standings_html, table_id)
+        rank = 1
+        for row in parsed_rows:
+            standing_row = build_bbr_standing_row(row, conference, rank, stats_by_team_id)
+            if not standing_row:
+                continue
+            bucket.append(standing_row)
+            rank += 1
+
+    standings_summary = {
+        "summary_version": STANDINGS_SUMMARY_VERSION,
+        "season": season,
+        "updated_at": utc_now(),
+        "east": east_rows,
+        "west": west_rows,
+        "playoffs": {
+            "rounds": [
+                {"name": "Round One", "series": []},
+                {"name": "Conf. Semis", "series": []},
+                {"name": "Conf. Finals", "series": []},
+                {"name": "Finals", "series": []},
+            ]
+        },
+        "source": "basketball-reference",
+    }
+
+    return standings_summary, stats_by_team_id
+
+
+def store_bbr_league_snapshot(season=None):
+    standings_summary, stats_by_team_id = fetch_bbr_league_snapshot(season)
+    season = standings_summary["season"]
+    standings_cache.update_one(
+        {"season": season},
+        {"$set": standings_summary},
+        upsert=True,
+    )
+
+    standings_by_team_id = {
+        int(row["team_id"]): row
+        for row in [*standings_summary.get("east", []), *standings_summary.get("west", [])]
+    }
+
+    updated_count = 0
+    for team in teams.get_teams():
+        team_id = int(team["id"])
+        standing = standings_by_team_id.get(team_id, {})
+        stats = stats_by_team_id.get(team_id)
+        team_identity = build_team_identity(team_id)
+        team_identity["conference"] = standing.get("conference", "")
+
+        set_fields = {
+            "team_id": team_id,
+            "season": season,
+            "summary_version": TEAM_SUMMARY_VERSION,
+            "team": team_identity,
+            "record": standing.get("record", ""),
+            "win_streak": standing.get("streak", ""),
+            "standing": standing.get("standing_label", ""),
+            "standing_rank": standing.get("rank"),
+            "conference": standing.get("conference", ""),
+            "updated_at": utc_now(),
+            "source": "basketball-reference",
+            "seeded_without_live_stats": False,
+        }
+        if stats:
+            set_fields["stats"] = stats
+
+        team_cache.update_one(
+            {"team_id": team_id, "season": season},
+            {
+                "$set": set_fields,
+                "$setOnInsert": {
+                    "last_game": None,
+                    "players": [],
+                },
+            },
+            upsert=True,
+        )
+        updated_count += 1
+
+    return {"season": season, "teams": updated_count, "standings": standings_summary}
+
+
+def fetch_bbr_team_detail(team_id, season=None):
+    season = season or get_current_season()
+    team_id = int(team_id)
+    team = TEAM_STATIC_BY_ID.get(team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Unknown team.")
+
+    bbr_year = get_bbr_season_year(season)
+    bbr_abbreviation = get_bbr_abbreviation(team["abbreviation"])
+    team_html = fetch_bbr_html(f"/teams/{bbr_abbreviation}/{bbr_year}.html")
+    games_html = fetch_bbr_html(f"/teams/{bbr_abbreviation}/{bbr_year}_games.html")
+
+    roster_rows = parse_bbr_table(team_html, "roster")
+    regular_rows = parse_bbr_table(team_html, "per_game_stats")
+    postseason_rows = parse_bbr_table(team_html, "per_game_stats_post")
+    games_rows = parse_bbr_table(games_html, "games")
+
+    return {
+        "players": build_bbr_players(roster_rows, regular_rows, postseason_rows),
+        "last_game": build_bbr_last_game(games_rows),
+    }
+
+
+def store_bbr_team_detail(team_id, season=None):
+    season = season or get_current_season()
+    detail = fetch_bbr_team_detail(team_id, season)
+    team_cache.update_one(
+        {"team_id": int(team_id), "season": season},
+        {
+            "$set": {
+                "players": detail["players"],
+                "last_game": detail["last_game"],
+                "updated_at": utc_now(),
+                "source": "basketball-reference",
+                "seeded_without_live_stats": False,
+            },
+            "$setOnInsert": {
+                "team_id": int(team_id),
+                "season": season,
+                "summary_version": TEAM_SUMMARY_VERSION,
+                "team": build_team_identity(team_id),
+                "stats": {},
+                "record": "",
+                "win_streak": "",
+                "standing": "",
+                "standing_rank": None,
+                "conference": "",
+            },
+        },
+        upsert=True,
+    )
+    return detail
+
+
 def store_standings(season=None):
     summary = fetch_standings(season)
     standings_cache.update_one(
@@ -398,7 +879,7 @@ def get_cached_standings(season=None):
     if cached:
         return cached
 
-    return store_standings(season)
+    raise HTTPException(status_code=404, detail="Standings not cached yet.")
 
 
 def fetch_all_team_stats(season):
@@ -487,17 +968,7 @@ def store_team_summary(team_id, season=None, standings=None, team_stats=None, pl
 
 
 def refresh_all_teams(season=None):
-    season = season or get_current_season()
-    standings = store_standings(season)
-    team_stats = fetch_all_team_stats(season)
-    player_stats = fetch_all_player_stats(season)
-    refreshed = 0
-
-    for team in teams.get_teams():
-        store_team_summary(int(team["id"]), season, standings, team_stats, player_stats)
-        refreshed += 1
-
-    return refreshed
+    return store_bbr_league_snapshot(season)["teams"]
 
 
 def get_cached_team_summary(team_id, season=None):

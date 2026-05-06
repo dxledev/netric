@@ -32,7 +32,7 @@ from auth import (
 )
 
 from database import fetch_queue_collection, player_cache_collection
-from services.team_service import get_cached_standings, get_cached_team_summary, list_teams, store_team_summary
+from services.team_service import get_cached_standings, get_cached_team_summary, get_current_season, list_teams
 
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -116,13 +116,44 @@ def get_team_summary(team_id: int):
 @app.post("/teams/{team_id}/refresh")
 @app.post("/api/teams/{team_id}/refresh")
 def refresh_team_summary(team_id: int):
-    return store_team_summary(team_id)
+    season = get_current_season()
+    fetch_queue.update_one(
+        {"job_type": "team_detail_refresh", "team_id": int(team_id), "season": season},
+        {
+            "$set": {
+                "job_type": "team_detail_refresh",
+                "team_id": int(team_id),
+                "season": season,
+                "name": f"Team {team_id}",
+                "refresh": True,
+                "queued_at": datetime.now(UTC),
+                "next_attempt_at": datetime.now(UTC),
+            }
+        },
+        upsert=True,
+    )
+    return {"queued": True, "team_id": int(team_id), "season": season}
 
 
 @app.get("/standings")
 @app.get("/api/standings")
 def standings():
-    return get_cached_standings()
+    try:
+        return get_cached_standings()
+    except HTTPException as exc:
+        fetch_queue.update_one(
+            {"job_type": "team_refresh"},
+            {
+                "$set": {
+                    "job_type": "team_refresh",
+                    "name": "All NBA teams",
+                    "refresh": True,
+                    "queued_at": datetime.now(UTC),
+                }
+            },
+            upsert=True,
+        )
+        raise exc
 
 # ---------------------------
 # AUTH

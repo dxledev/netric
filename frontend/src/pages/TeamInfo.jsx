@@ -129,10 +129,15 @@ export default function TeamInfo() {
                   <tbody className="divide-y divide-white/10">
                     {players.map(player => {
                       const stats = getPlayerScopeStats(player, postseason, includePlayIn)
+                      const hasPlayerRoute = Number.isFinite(Number(player.player_id))
                       return (
                         <tr key={player.player_id} className="text-slate-100">
                           <td className="py-3 pr-4 font-medium text-white">
-                            <Link className="hover:text-blue-200" to={`/player/${player.player_id}`}>{player.name}</Link>
+                            {hasPlayerRoute ? (
+                              <Link className="hover:text-blue-200" to={`/player/${player.player_id}`}>{player.name}</Link>
+                            ) : (
+                              player.name
+                            )}
                           </td>
                           <td className="py-3 pr-4">{player.jersey_number || "-"}</td>
                           <td className="py-3 pr-4">{player.position || "-"}</td>

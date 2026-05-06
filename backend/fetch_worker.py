@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import UTC, datetime, timedelta
 
 from database import fetch_queue_collection, player_cache_collection
@@ -9,34 +10,75 @@ from services.fetch_service import (
     fetch_player_data,
     merge_cached_player_data,
 )
-from services.team_service import refresh_all_teams
+from nba_api.stats.static import teams
+from pymongo import ReturnDocument
+from services.team_service import (
+    BBR_REQUEST_DELAY_SECONDS,
+    BasketballReferenceRateLimit,
+    get_current_season,
+    refresh_all_teams,
+    store_bbr_team_detail,
+)
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
 
 MAX_PER_RUN = int(os.getenv("FETCH_WORKER_MAX_PER_RUN", "5"))
 RETRY_DELAY_SECONDS = int(os.getenv("FETCH_WORKER_RETRY_DELAY_SECONDS", "900"))
+WORKER_LOCK_SECONDS = int(os.getenv("FETCH_WORKER_LOCK_SECONDS", "1800"))
 
 
 def utc_now():
     return datetime.now(UTC)
 
 
-def next_retry_at():
-    return utc_now() + timedelta(seconds=RETRY_DELAY_SECONDS)
+def next_retry_at(delay_seconds=RETRY_DELAY_SECONDS):
+    return utc_now() + timedelta(seconds=delay_seconds)
 
 
 def find_next_job():
     now = utc_now()
-    return fetch_queue.find_one(
+    ready_filter = {
+        "$and": [
+            {
+                "$or": [
+                    {"next_attempt_at": {"$exists": False}},
+                    {"next_attempt_at": None},
+                    {"next_attempt_at": {"$lte": now}},
+                ]
+            },
+            {
+                "$or": [
+                    {"locked_until": {"$exists": False}},
+                    {"locked_until": None},
+                    {"locked_until": {"$lte": now}},
+                ]
+            },
+        ]
+    }
+    claim_update = {
+        "$set": {
+            "locked_at": now,
+            "locked_until": now + timedelta(seconds=WORKER_LOCK_SECONDS),
+        }
+    }
+    team_job = fetch_queue.find_one_and_update(
         {
-            "$or": [
-                {"next_attempt_at": {"$exists": False}},
-                {"next_attempt_at": None},
-                {"next_attempt_at": {"$lte": now}},
-            ]
+            **ready_filter,
+            "job_type": {"$in": ["team_refresh", "team_detail_refresh"]},
         },
+        claim_update,
         sort=[("queued_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    if team_job:
+        return team_job
+
+    return fetch_queue.find_one_and_update(
+        ready_filter,
+        claim_update,
+        sort=[("queued_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
     )
 
 
@@ -93,7 +135,7 @@ def fetch_repair_data(player_id):
     return merge_cached_player_data(cached_data, fetched_data), failures, has_more
 
 
-def mark_job_failed(job, error):
+def mark_job_failed(job, error, retry_delay_seconds=None):
     attempts = int(job.get("attempts", 0)) + 1
     fetch_queue.update_one(
         {"_id": job["_id"]},
@@ -102,16 +144,52 @@ def mark_job_failed(job, error):
                 "attempts": attempts,
                 "last_error": str(error),
                 "last_attempted_at": utc_now(),
-                "next_attempt_at": next_retry_at(),
-            }
+                "next_attempt_at": next_retry_at(retry_delay_seconds or RETRY_DELAY_SECONDS),
+            },
+            "$unset": {"locked_at": "", "locked_until": ""},
         },
     )
 
 
 def process_team_refresh_job(job):
-    season = job.get("season")
+    season = job.get("season") or get_current_season()
     refreshed_count = refresh_all_teams(season)
-    print(f"Stored team refresh for {refreshed_count} teams.")
+    queue_team_detail_jobs(season)
+    print(f"Stored team snapshot for {refreshed_count} teams.")
+
+
+def queue_team_detail_jobs(season=None):
+    now = utc_now()
+    queued_count = 0
+    for index, team in enumerate(teams.get_teams()):
+        team_id = int(team["id"])
+        job_filter = {
+            "job_type": "team_detail_refresh",
+            "team_id": team_id,
+            "season": season,
+        }
+        if fetch_queue.find_one(job_filter):
+            continue
+        fetch_queue.insert_one(
+            {
+                **job_filter,
+                "name": team["full_name"],
+                "refresh": True,
+                "queued_at": now,
+                "next_attempt_at": now + timedelta(seconds=index * BBR_REQUEST_DELAY_SECONDS),
+            }
+        )
+        queued_count += 1
+    print(f"Queued {queued_count} team detail refresh jobs.")
+
+
+def process_team_detail_refresh_job(job):
+    team_id = int(job["team_id"])
+    season = job.get("season")
+    print("Fetching team detail:", team_id)
+    detail = store_bbr_team_detail(team_id, season)
+    print(f"Stored team detail: {team_id} ({len(detail.get('players', []))} players)")
+    time.sleep(BBR_REQUEST_DELAY_SECONDS)
 
 
 def process_player_job(job):
@@ -153,6 +231,8 @@ def run_queue():
             if job.get("job_type") == "team_refresh":
                 print("Fetching team refresh.")
                 process_team_refresh_job(job)
+            elif job.get("job_type") == "team_detail_refresh":
+                process_team_detail_refresh_job(job)
             else:
                 completed = process_player_job(job)
                 if not completed:
@@ -161,6 +241,9 @@ def run_queue():
 
             fetch_queue.delete_one({"_id": job["_id"]})
 
+        except BasketballReferenceRateLimit as e:
+            print("Fetch failed:", e)
+            mark_job_failed(job, e, retry_delay_seconds=e.retry_after)
         except Exception as e:
             print("Fetch failed:", e)
             mark_job_failed(job, e)
