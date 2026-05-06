@@ -16,7 +16,9 @@ from auth import (
     get_user_favorites,
     get_user_notifications,
     add_favorite_player,
+    add_favorite_team,
     remove_favorite_player,
+    remove_favorite_team,
     get_player_comments,
     get_player_reply_thread,
     get_trending_player_comments,
@@ -171,10 +173,20 @@ def profile_notifications(authorization: str = Header(None)):
 def favorite_player(data: dict, authorization: str = Header(None)):
     return add_favorite_player(data, authorization)
 
+@app.post("/favorite/teams")
+@app.post("/api/favorite/teams")
+def favorite_team(data: dict, authorization: str = Header(None)):
+    return add_favorite_team(data, authorization)
+
 @app.delete("/favorites/player/{player_id}")
 @app.delete("/api/favorites/player/{player_id}")
 def delete_favorite_player(player_id: int, authorization: str = Header(None)):
     return remove_favorite_player(player_id, authorization)
+
+@app.delete("/favorites/team/{team_id}")
+@app.delete("/api/favorites/team/{team_id}")
+def delete_favorite_team(team_id: int, authorization: str = Header(None)):
+    return remove_favorite_team(team_id, authorization)
 
 # ---------------------------
 # SUMMARY (CACHE ONLY)

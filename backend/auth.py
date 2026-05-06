@@ -622,6 +622,30 @@ def add_favorite_player(data, authorization: str):
 
     return {"message": "Player favorited"}
 
+def add_favorite_team(data, authorization: str):
+    email = get_email_from_authorization(authorization)
+    team_id = data.get("id", data.get("team_id"))
+
+    if team_id is None:
+        raise HTTPException(status_code=400, detail="Team id is required")
+
+    users_collection.update_one(
+        {"email": email},
+        {
+            "$addToSet": {
+                "favorites.teams": {
+                    "id": int(team_id),
+                    "name": data.get("name"),
+                    "abbreviation": data.get("abbreviation"),
+                    "city": data.get("city"),
+                    "nickname": data.get("nickname")
+                }
+            }
+        }
+    )
+
+    return {"message": "Team favorited"}
+
 def remove_favorite_player(player_id: int, authorization: str):
     email = get_email_from_authorization(authorization)
 
@@ -638,6 +662,23 @@ def remove_favorite_player(player_id: int, authorization: str):
         raise HTTPException(status_code=404, detail="Player not found in favorites")
 
     return {"message": "Player removed"}
+
+def remove_favorite_team(team_id: int, authorization: str):
+    email = get_email_from_authorization(authorization)
+
+    result = users_collection.update_one(
+        {"email": email},
+        {
+            "$pull": {
+                "favorites.teams": { "id": team_id }
+            }
+        }
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Team not found in favorites")
+
+    return {"message": "Team removed"}
 
 
 def get_player_comments(player_id: int, authorization: str = Header(None)):

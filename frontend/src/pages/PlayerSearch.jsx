@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import axios from "axios"
 import PlayerCard from "../components/PlayerCard"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
+import TeamSummaryCard from "../components/TeamSummaryCard"
 import ReturnHome from "../components/ReturnHome"
 import { API_BASE } from "../api"
 import { writePlayerSummaryCache } from "../utils/playerSummaryCache"
@@ -21,6 +22,8 @@ export default function PlayerSearch() {
   const [category, setCategory] = useState("players")
   const [matches, setMatches] = useState([])
   const [loadingMatches, setLoadingMatches] = useState(false)
+  const [teams, setTeams] = useState([])
+  const [loadingTeams, setLoadingTeams] = useState(false)
   const [trendingPlayers, setTrendingPlayers] = useState([])
   const [loadingTrending, setLoadingTrending] = useState(true)
   const [trendingError, setTrendingError] = useState(null)
@@ -49,6 +52,27 @@ export default function PlayerSearch() {
     const normalizedQuery = normalizeSearchInput(inputValue ?? name)
 
     if (!normalizedQuery) {
+      return
+    }
+
+    if (category === "teams") {
+      const teamMatch = teamMatches.find(team => (
+        normalizeSearchInput(team.name) === normalizedQuery ||
+        normalizeSearchInput(team.abbreviation) === normalizedQuery ||
+        normalizeSearchInput(team.nickname) === normalizedQuery
+      )) || teamMatches[0]
+
+      if (teamMatch) {
+        setStats(teamMatch)
+        setMatches([])
+        setError(null)
+        setLoading(false)
+        setHasSuccessfulSearch(true)
+      } else {
+        setStats(null)
+        setError(loadingTeams ? "Teams are still loading. Try again in a moment." : "No team matched that search.")
+      }
+
       return
     }
 
@@ -118,6 +142,40 @@ export default function PlayerSearch() {
   }, [])
 
   useEffect(() => {
+    if (category !== "teams" || teams.length > 0) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    async function fetchTeams() {
+      try {
+        setLoadingTeams(true)
+        const res = await axios.get(`${API_BASE}/teams`)
+
+        if (!isCancelled) {
+          setTeams(Array.isArray(res.data?.teams) ? res.data.teams : [])
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setTeams([])
+          setError("Unable to load teams right now.")
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingTeams(false)
+        }
+      }
+    }
+
+    fetchTeams()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [category, teams.length])
+
+  useEffect(() => {
     let isCancelled = false
     const normalizedQuery = normalizeSearchInput(name)
 
@@ -153,6 +211,18 @@ export default function PlayerSearch() {
     }
   }, [name, category])
 
+  const teamMatches = useMemo(() => {
+    const normalizedQuery = normalizeSearchInput(name)
+
+    if (category !== "teams" || !normalizedQuery) {
+      return []
+    }
+
+    return teams
+      .filter(team => normalizeSearchInput(`${team.name} ${team.abbreviation} ${team.city} ${team.nickname}`).includes(normalizedQuery))
+      .slice(0, 25)
+  }, [category, name, teams])
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_24%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
@@ -183,7 +253,13 @@ export default function PlayerSearch() {
                 <div className="grid gap-3 md:grid-cols-[180px_1fr_auto]">
                   <select
                     value={category}
-                    onChange={e => setCategory(e.target.value)}
+                    onChange={e => {
+                      setCategory(e.target.value)
+                      setStats(null)
+                      setError(null)
+                      setMatches([])
+                      setHasSuccessfulSearch(false)
+                    }}
                     className="rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-sm text-white outline-none transition-colors duration-300 focus:border-blue-300/50"
                   >
                     <option value="players" className="bg-slate-900 text-white">
@@ -241,6 +317,37 @@ export default function PlayerSearch() {
                         )}
                       </div>
                     )}
+
+                    {category === "teams" && (loadingTeams || teamMatches.length > 0) && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-emerald-300/20 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur">
+                        {loadingTeams && (
+                          <div className="px-4 py-3 text-xs text-slate-300">Loading teams...</div>
+                        )}
+
+                        {!loadingTeams && (
+                          <div className="max-h-72 overflow-y-auto py-1">
+                            {teamMatches.map(team => (
+                              <button
+                                type="button"
+                                key={team.team_id}
+                                onClick={() => {
+                                  setName(team.name)
+                                  setStats(team)
+                                  setError(null)
+                                  setHasSuccessfulSearch(true)
+                                }}
+                                className="flex w-full items-center justify-between gap-3 bg-transparent px-4 py-2 text-left text-sm text-slate-100 transition-colors duration-200 hover:bg-emerald-400/10"
+                              >
+                                <span className="truncate">{team.name}</span>
+                                <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-emerald-200">
+                                  {team.abbreviation}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -274,14 +381,18 @@ export default function PlayerSearch() {
 
               {stats && !loading && (
                 <div className="animate-content-in">
-                  <PlayerCard {...stats} />
+                  {category === "teams" ? (
+                    <TeamSummaryCard team={stats} isDraggable={false} />
+                  ) : (
+                    <PlayerCard {...stats} />
+                  )}
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {!hasSuccessfulSearch && (
+        {category === "players" && !hasSuccessfulSearch && (
           <section className="mx-auto mt-[100px] max-w-5xl animate-content-in">
             <div className="mb-5">
               <div>

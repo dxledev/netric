@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
+import TeamSummaryCard from "../components/TeamSummaryCard"
 import { API_BASE } from "../api"
 import { readPlayerSummaryCache } from "../utils/playerSummaryCache"
 import { normalizeSearchFilter } from "../utils/searchText"
@@ -125,6 +126,14 @@ function getPlayerOrderCacheKey(token) {
   return token ? `netric:favorites:player-order:${token}` : null
 }
 
+function getTeamOrderCacheKey(token) {
+  return token ? `netric:favorites:team-order:${token}` : null
+}
+
+function getTeamId(team) {
+  return Number(team?.id ?? team?.team_id)
+}
+
 function readPlayerOrder(token) {
   if (typeof window === "undefined") {
     return []
@@ -147,6 +156,28 @@ function readPlayerOrder(token) {
   }
 }
 
+function readTeamOrder(token) {
+  if (typeof window === "undefined") {
+    return []
+  }
+
+  const cacheKey = getTeamOrderCacheKey(token)
+
+  if (!cacheKey) {
+    return []
+  }
+
+  try {
+    const rawOrder = window.localStorage.getItem(cacheKey)
+    const parsedOrder = rawOrder ? JSON.parse(rawOrder) : []
+
+    return Array.isArray(parsedOrder) ? parsedOrder : []
+  } catch (error) {
+    console.error("Failed to read team order cache", error)
+    return []
+  }
+}
+
 function writePlayerOrder(token, playerIds) {
   if (typeof window === "undefined") {
     return
@@ -165,6 +196,24 @@ function writePlayerOrder(token, playerIds) {
   }
 }
 
+function writeTeamOrder(token, teamIds) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  const cacheKey = getTeamOrderCacheKey(token)
+
+  if (!cacheKey) {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(cacheKey, JSON.stringify(teamIds))
+  } catch (error) {
+    console.error("Failed to write team order cache", error)
+  }
+}
+
 function applyPlayerOrder(players, orderedIds) {
   if (!orderedIds.length) {
     return players
@@ -175,6 +224,27 @@ function applyPlayerOrder(players, orderedIds) {
   return [...players].sort((left, right) => {
     const leftRank = orderMap.has(left.id) ? orderMap.get(left.id) : Number.POSITIVE_INFINITY
     const rightRank = orderMap.has(right.id) ? orderMap.get(right.id) : Number.POSITIVE_INFINITY
+
+    if (leftRank === rightRank) {
+      return 0
+    }
+
+    return leftRank - rightRank
+  })
+}
+
+function applyTeamOrder(teams, orderedIds) {
+  if (!orderedIds.length) {
+    return teams
+  }
+
+  const orderMap = new Map(orderedIds.map((id, index) => [Number(id), index]))
+
+  return [...teams].sort((left, right) => {
+    const leftId = getTeamId(left)
+    const rightId = getTeamId(right)
+    const leftRank = orderMap.has(leftId) ? orderMap.get(leftId) : Number.POSITIVE_INFINITY
+    const rightRank = orderMap.has(rightId) ? orderMap.get(rightId) : Number.POSITIVE_INFINITY
 
     if (leftRank === rightRank) {
       return 0
@@ -214,6 +284,7 @@ function readFavoritesCache(token) {
     return {
       ...normalizedFavorites,
       players: applyPlayerOrder(normalizedFavorites.players, readPlayerOrder(token)),
+      teams: applyTeamOrder(normalizedFavorites.teams, readTeamOrder(token)),
     }
   } catch (error) {
     console.error("Failed to read favorites cache", error)
@@ -291,6 +362,8 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [draggedPlayerId, setDraggedPlayerId] = useState(null)
   const [dragOverPlayerId, setDragOverPlayerId] = useState(null)
+  const [draggedTeamId, setDraggedTeamId] = useState(null)
+  const [dragOverTeamId, setDragOverTeamId] = useState(null)
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false)
   const [playerNameFilter, setPlayerNameFilter] = useState("")
@@ -349,6 +422,7 @@ export default function Home() {
         const orderedFavorites = {
           ...nextFavorites,
           players: applyPlayerOrder(nextFavorites.players, readPlayerOrder(token)),
+          teams: applyTeamOrder(nextFavorites.teams, readTeamOrder(token)),
         }
         setFavorites(orderedFavorites)
         writeFavoritesCache(token, orderedFavorites)
@@ -531,6 +605,92 @@ export default function Home() {
     setDragOverPlayerId(null)
   }
 
+  function handleTeamRemoved(teamId) {
+    setFavorites(currentFavorites => {
+      const nextFavorites = {
+        ...currentFavorites,
+        teams: currentFavorites.teams.filter(team => getTeamId(team) !== teamId),
+      }
+
+      writeFavoritesCache(token, nextFavorites)
+      writeTeamOrder(token, nextFavorites.teams.map(team => getTeamId(team)))
+      return nextFavorites
+    })
+  }
+
+  function handleTeamMoveToTop(teamId) {
+    setFavorites(currentFavorites => {
+      const nextTeams = [...currentFavorites.teams]
+      const teamIndex = nextTeams.findIndex(team => getTeamId(team) === teamId)
+
+      if (teamIndex <= 0) {
+        return currentFavorites
+      }
+
+      const [selectedTeam] = nextTeams.splice(teamIndex, 1)
+      nextTeams.unshift(selectedTeam)
+
+      const nextFavorites = {
+        ...currentFavorites,
+        teams: nextTeams,
+      }
+
+      writeFavoritesCache(token, nextFavorites)
+      writeTeamOrder(token, nextTeams.map(team => getTeamId(team)))
+      return nextFavorites
+    })
+  }
+
+  function handleTeamDragStart(teamId) {
+    setDraggedTeamId(teamId)
+  }
+
+  function handleTeamDragOver(teamId) {
+    if (!draggedTeamId || draggedTeamId === teamId) {
+      return
+    }
+
+    setDragOverTeamId(teamId)
+  }
+
+  function handleTeamDrop(targetTeamId) {
+    if (!draggedTeamId || draggedTeamId === targetTeamId) {
+      setDraggedTeamId(null)
+      setDragOverTeamId(null)
+      return
+    }
+
+    setFavorites(currentFavorites => {
+      const nextTeams = [...currentFavorites.teams]
+      const draggedIndex = nextTeams.findIndex(team => getTeamId(team) === draggedTeamId)
+      const targetIndex = nextTeams.findIndex(team => getTeamId(team) === targetTeamId)
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        return currentFavorites
+      }
+
+      const [draggedTeam] = nextTeams.splice(draggedIndex, 1)
+      nextTeams.splice(targetIndex, 0, draggedTeam)
+
+      const nextFavorites = {
+        ...currentFavorites,
+        teams: nextTeams,
+      }
+
+      writeFavoritesCache(token, nextFavorites)
+      writeTeamOrder(token, nextTeams.map(team => getTeamId(team)))
+      return nextFavorites
+    })
+
+    setDraggedTeamId(null)
+    setDragOverTeamId(null)
+  }
+
+  function handleTeamDragEnd() {
+    setDraggedTeamId(null)
+    setDragOverTeamId(null)
+  }
+
   const tabs = [
     { id: "players", label: "Favorite Players", count: favorites.players.length },
     { id: "teams", label: "Favorite Teams", count: favorites.teams.length },
@@ -690,13 +850,6 @@ export default function Home() {
                     className="rounded-xl border border-emerald-300/25 bg-emerald-400/15 px-5 py-3 text-sm font-medium text-emerald-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-400/20"
                   >
                     Compare
-                  </button>
-
-                  <button
-                    onClick={() => navigate("/teams")}
-                    className="rounded-xl border border-blue-300/25 bg-blue-400/15 px-5 py-3 text-sm font-medium text-blue-100 transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-400/20"
-                  >
-                    Teams
                   </button>
 
                   <button
@@ -960,14 +1113,24 @@ export default function Home() {
                         No favorite teams yet.
                       </div>
                     ) : (
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-5 min-[1700px]:grid-cols-2">
                         {favorites.teams.map(team => (
                           <div
-                            key={team.id}
-                            className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15"
+                            key={getTeamId(team)}
+                            className="transform-gpu transition-all duration-300 ease-out animate-content-in"
                           >
-                            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Team</p>
-                            <p className="mt-3 text-xl font-semibold text-white">{team.name}</p>
+                            <TeamSummaryCard
+                              team={team}
+                              onRemoved={handleTeamRemoved}
+                              onMoveToTop={handleTeamMoveToTop}
+                              onDragStart={handleTeamDragStart}
+                              onDragOver={handleTeamDragOver}
+                              onDrop={handleTeamDrop}
+                              onDragEnd={handleTeamDragEnd}
+                              isDragged={draggedTeamId === getTeamId(team)}
+                              isDragTarget={dragOverTeamId === getTeamId(team)}
+                              canMoveToTop={favorites.teams.findIndex(item => getTeamId(item) === getTeamId(team)) >= playerGridColumns}
+                            />
                           </div>
                         ))}
                       </div>
