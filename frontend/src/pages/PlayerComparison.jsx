@@ -13,7 +13,7 @@ import {
 
 function getScopeLabel(postseason, includePlayIn) {
   if (postseason && includePlayIn) {
-    return "postseason and play-in"
+    return "playoffs and play-in"
   }
 
   if (postseason) {

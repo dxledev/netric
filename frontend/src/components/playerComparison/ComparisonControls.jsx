@@ -67,7 +67,7 @@ export default function ComparisonControls({
             onChange={event => onPostseasonChange(event.target.checked)}
             className="h-4 w-4 accent-blue-300"
           />
-          Postseason
+          Playoffs
         </label>
 
         {showPlayInToggle && (

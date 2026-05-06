@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
@@ -628,12 +628,18 @@ export default function Home() {
     setTeamFilter("")
   }
 
-  function handleSummaryLoaded(playerId, summary) {
-    setPlayerSummaries(currentSummaries => ({
-      ...currentSummaries,
-      [playerId]: summary,
-    }))
-  }
+  const handleSummaryLoaded = useCallback((playerId, summary) => {
+    setPlayerSummaries(currentSummaries => {
+      if (currentSummaries[playerId] === summary) {
+        return currentSummaries
+      }
+
+      return {
+        ...currentSummaries,
+        [playerId]: summary,
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const currentTeamOptions = new Set(availableDashboardTeams.map(team => team.abbreviation))
