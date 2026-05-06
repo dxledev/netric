@@ -172,7 +172,9 @@ def parse_bbr_table(html, table_id):
 
 
 def clean_bbr_team_name(value):
-    return re.sub(r"\s+", " ", str(value or "").replace("*", "")).strip()
+    without_markers = str(value or "").replace("*", "")
+    without_seed = re.sub(r"\s+\(\d+\)$", "", without_markers)
+    return re.sub(r"\s+", " ", without_seed).strip()
 
 
 def normalize_team_name_key(value):
@@ -474,18 +476,18 @@ def build_bbr_team_stats_row(base_row, opponent_row=None):
     opponent_row = opponent_row or {}
     return {
         "gp": to_int(base_row.get("g")),
-        "pts": to_float(base_row.get("pts_per_g")),
+        "pts": to_float(base_row.get("pts")),
         "fg_pct": to_float(base_row.get("fg_pct")),
         "fg3_pct": to_float(base_row.get("fg3_pct")),
         "ft_pct": to_float(base_row.get("ft_pct")),
-        "ast": to_float(base_row.get("ast_per_g")),
-        "tov": to_float(base_row.get("tov_per_g")),
-        "oppg": to_float(opponent_row.get("pts_per_g")),
-        "ofg_pct": to_float(opponent_row.get("fg_pct")),
-        "o3fg_pct": to_float(opponent_row.get("fg3_pct")),
-        "blk": to_float(base_row.get("blk_per_g")),
-        "stl": to_float(base_row.get("stl_per_g")),
-        "reb": to_float(base_row.get("trb_per_g")),
+        "ast": to_float(base_row.get("ast")),
+        "tov": to_float(base_row.get("tov")),
+        "oppg": to_float(opponent_row.get("opp_pts")),
+        "ofg_pct": to_float(opponent_row.get("opp_fg_pct")),
+        "o3fg_pct": to_float(opponent_row.get("opp_fg3_pct")),
+        "blk": to_float(base_row.get("blk")),
+        "stl": to_float(base_row.get("stl")),
+        "reb": to_float(base_row.get("trb")),
     }
 
 
@@ -511,12 +513,12 @@ def build_bbr_standing_row(row, conference, rank, stats_by_team_id=None):
         "record": f"{wins}-{losses}",
         "win_pct": to_float(row.get("win_loss_pct")),
         "games_back": parse_bbr_games_back(row.get("gb")),
-        "l10": normalize_bbr_record(row.get("last_ten")),
+        "l10": normalize_bbr_record(row.get("last_ten")) if row.get("last_ten") else "",
         "streak": normalize_bbr_streak(row.get("streak")),
-        "home_record": normalize_bbr_record(row.get("home_record")),
-        "away_record": normalize_bbr_record(row.get("road_record")),
-        "ppg": to_float(stats.get("pts")),
-        "oppg": to_float(stats.get("oppg")),
+        "home_record": normalize_bbr_record(row.get("home_record")) if row.get("home_record") else "",
+        "away_record": normalize_bbr_record(row.get("road_record")) if row.get("road_record") else "",
+        "ppg": to_float(row.get("pts_per_g"), to_float(stats.get("pts"))),
+        "oppg": to_float(row.get("opp_pts_per_g"), to_float(stats.get("oppg"))),
         "postseason_eligible": rank <= 10,
         "clinched_playoffs": rank <= 8,
     }
@@ -531,7 +533,7 @@ def calculate_bbr_ts_pct(row):
 
 
 def normalize_bbr_player_stats(row):
-    gp = to_int(row.get("g"))
+    gp = to_int(row.get("games", row.get("g")))
     pts = to_float(row.get("pts_per_g"))
     reb = to_float(row.get("trb_per_g"))
     ast = to_float(row.get("ast_per_g"))
@@ -555,10 +557,18 @@ def normalize_bbr_player_stats(row):
 def index_bbr_player_stats(rows):
     indexed = {}
     for row in rows:
-        player_key = row.get("player_id") or normalize_team_name_key(row.get("player"))
+        player_key = (
+            row.get("player_id")
+            or row.get("name_display_id")
+            or normalize_team_name_key(row.get("player") or row.get("name_display"))
+        )
+        player_name_key = normalize_team_name_key(row.get("player") or row.get("name_display"))
         if not player_key:
             continue
-        indexed[player_key] = normalize_bbr_player_stats(row)
+        stats = normalize_bbr_player_stats(row)
+        indexed[player_key] = stats
+        if player_name_key:
+            indexed[player_name_key] = stats
     return indexed
 
 
