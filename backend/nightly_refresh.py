@@ -1,4 +1,4 @@
-from refresh_db import refresh_all_players
+from refresh_db import refresh_all_players, refresh_all_teams
 from fetch_worker import run_queue
 from refresh_audit import run_refresh_audit_from_env
 
@@ -6,6 +6,7 @@ from refresh_audit import run_refresh_audit_from_env
 def main():
     print("Nightly refresh started.")
     refresh_all_players()
+    refresh_all_teams()
 
     total_processed = 0
 

@@ -29,8 +29,31 @@ def build_refresh_job(player_id, name, repair_missing_logs=False):
     return job
 
 
+def build_team_refresh_job():
+    return {
+        "job_type": "team_refresh",
+        "name": "All NBA teams",
+        "refresh": True,
+        "queued_at": datetime.now(UTC),
+    }
+
+
 def is_already_queued(player_id):
     return fetch_queue.find_one({"player_id": player_id}) is not None
+
+
+def is_team_refresh_already_queued():
+    return fetch_queue.find_one({"job_type": "team_refresh"}) is not None
+
+
+def refresh_all_teams():
+    if is_team_refresh_already_queued():
+        print("Team refresh already queued.")
+        return 0
+
+    fetch_queue.insert_one(build_team_refresh_job())
+    print("Queued team stats refresh.")
+    return 1
 
 
 def find_cached_player(player_id):

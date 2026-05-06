@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import UTC, datetime
 import os
 
 from fastapi import FastAPI, Header, HTTPException
@@ -29,6 +30,7 @@ from auth import (
 )
 
 from database import fetch_queue_collection, player_cache_collection
+from services.team_service import get_cached_standings, get_cached_team_summary, list_teams, store_team_summary
 
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -80,6 +82,45 @@ def search_player(name: str):
 @app.get("/api/search/players/matches/{name}")
 def search_player_name_matches(name: str, limit: int = 25):
     return search_player_matches(name, limit)
+
+
+@app.get("/teams")
+@app.get("/api/teams")
+def teams():
+    return list_teams()
+
+
+@app.get("/teams/{team_id}/summary")
+@app.get("/api/teams/{team_id}/summary")
+def get_team_summary(team_id: int):
+    try:
+        return get_cached_team_summary(team_id)
+    except HTTPException as exc:
+        fetch_queue.update_one(
+            {"job_type": "team_refresh"},
+            {
+                "$set": {
+                    "job_type": "team_refresh",
+                    "name": "All NBA teams",
+                    "refresh": True,
+                    "queued_at": datetime.now(UTC),
+                }
+            },
+            upsert=True,
+        )
+        raise exc
+
+
+@app.post("/teams/{team_id}/refresh")
+@app.post("/api/teams/{team_id}/refresh")
+def refresh_team_summary(team_id: int):
+    return store_team_summary(team_id)
+
+
+@app.get("/standings")
+@app.get("/api/standings")
+def standings():
+    return get_cached_standings()
 
 # ---------------------------
 # AUTH

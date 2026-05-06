@@ -9,6 +9,7 @@ from services.fetch_service import (
     fetch_player_data,
     merge_cached_player_data,
 )
+from services.team_service import refresh_all_teams
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
@@ -107,6 +108,37 @@ def mark_job_failed(job, error):
     )
 
 
+def process_team_refresh_job(job):
+    season = job.get("season")
+    refreshed_count = refresh_all_teams(season)
+    print(f"Stored team refresh for {refreshed_count} teams.")
+
+
+def process_player_job(job):
+    player_id = job["player_id"]
+    print("Fetching player_id:", player_id)
+
+    if job.get("repair_missing_logs"):
+        data, failures, has_more = fetch_repair_data(player_id)
+    else:
+        data = fetch_player_data(player_id)
+        failures = []
+        has_more = False
+
+    if data is not None:
+        store_player_data(player_id, data)
+    print("Stored:", player_id)
+
+    if failures:
+        raise Exception(summarize_missing_log_failures(failures))
+
+    if has_more:
+        mark_job_failed(job, "Missing game-log repair batch incomplete")
+        return False
+
+    return True
+
+
 def run_queue():
     print("Worker started.")
 
@@ -117,28 +149,15 @@ def run_queue():
         if not job:
             break
 
-        player_id = job["player_id"]
-        print("Fetching player_id:", player_id)
-
         try:
-            if job.get("repair_missing_logs"):
-                data, failures, has_more = fetch_repair_data(player_id)
+            if job.get("job_type") == "team_refresh":
+                print("Fetching team refresh.")
+                process_team_refresh_job(job)
             else:
-                data = fetch_player_data(player_id)
-                failures = []
-                has_more = False
-
-            if data is not None:
-                store_player_data(player_id, data)
-            print("Stored:", player_id)
-
-            if failures:
-                raise Exception(summarize_missing_log_failures(failures))
-
-            if has_more:
-                mark_job_failed(job, "Missing game-log repair batch incomplete")
-                processed += 1
-                continue
+                completed = process_player_job(job)
+                if not completed:
+                    processed += 1
+                    continue
 
             fetch_queue.delete_one({"_id": job["_id"]})
 
@@ -148,7 +167,7 @@ def run_queue():
 
         processed += 1
 
-    print(f"Processed {processed} players this run.")
+    print(f"Processed {processed} jobs this run.")
     return processed
 
 

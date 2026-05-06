@@ -10,6 +10,9 @@ import PlayerReplyThread from "./pages/PlayerReplyThread"
 import PlayerComparison from "./pages/PlayerComparison"
 import GameSummary from "./pages/GameSummary"
 import StatHighs from "./pages/StatHighs"
+import Teams from "./pages/Teams"
+import TeamInfo from "./pages/TeamInfo"
+import Standings from "./pages/Standings"
 import { isAuthenticated } from "./auth"
 
 function ScrollToTop() {
@@ -59,6 +62,9 @@ export default function App() {
           <Route path="/profile" element={<UserProfile />} />
           <Route path="/search" element={<PlayerSearch />} />
           <Route path="/compare" element={<PlayerComparison />} />
+          <Route path="/teams" element={<Teams />} />
+          <Route path="/teams/:id" element={<TeamInfo />} />
+          <Route path="/standings" element={<Standings />} />
           <Route path="/player/:id" element={<PlayerInfo />} />
           <Route path="/player/:id/comments/:commentId/replies/:replyId" element={<PlayerReplyThread />} />
           <Route path="/player/:id/games/:gameKey" element={<GameSummary />} />
