@@ -74,6 +74,12 @@ function getLastGameDisplay(summary) {
   return { game: regularLastGame, isPostseason: false }
 }
 
+function getGameResult(game) {
+  const result = String(game?.result || "").trim().toUpperCase()
+
+  return result === "W" || result === "L" ? result : ""
+}
+
 export default function PlayerSummaryCard({
   player,
   onRemoved,
@@ -102,6 +108,7 @@ export default function PlayerSummaryCard({
   const displaySeasonStats = summary?.season_stats_by_season?.[summary?.season] || summary?.season_stats
   const lastGameDisplay = getLastGameDisplay(summary)
   const lastGame = lastGameDisplay?.game || null
+  const lastGameResult = getGameResult(lastGame)
 
   useEffect(() => {
     const cachedSummary = readPlayerSummaryCache(player.id)
@@ -468,7 +475,20 @@ export default function PlayerSummaryCard({
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-100">
                 {lastGameDisplay.isPostseason ? "Last Game - PS" : "Last Game"}
               </p>
-              <p className="mt-2 text-sm text-white">{lastGame.matchup}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <p className="min-w-0 truncate text-sm text-white">{lastGame.matchup}</p>
+                {lastGameResult && (
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      lastGameResult === "W"
+                        ? "bg-emerald-400/15 text-emerald-200"
+                        : "bg-red-400/15 text-red-200"
+                    }`}
+                  >
+                    {lastGameResult}
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-xs text-slate-300">{getGameDisplayDate(lastGame)}</p>
               <p className="mt-3 text-sm text-slate-200">
                 {formatNumber(lastGame.pts, 0)} PTS / {formatNumber(lastGame.ast, 0)} AST / {formatNumber(lastGame.reb, 0)} REB
