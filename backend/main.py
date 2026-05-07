@@ -37,6 +37,54 @@ from services.team_service import get_cached_standings, get_cached_team_summary,
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
+
+def player_scope_has_games(players, scope):
+    for player in players or []:
+        try:
+            if float((player.get(scope) or {}).get("gp") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def should_queue_team_detail_refresh(summary):
+    standing_rank = summary.get("standing_rank")
+    try:
+        standing_rank = int(standing_rank)
+    except (TypeError, ValueError):
+        standing_rank = None
+
+    is_postseason_team = standing_rank is not None and standing_rank <= 10
+    needs_latest_game_fields = is_postseason_team and "regular_last_game" not in summary
+    needs_playin_stats = (
+        standing_rank is not None
+        and 7 <= standing_rank <= 10
+        and not player_scope_has_games(summary.get("players"), "playin")
+    )
+
+    return needs_latest_game_fields or needs_playin_stats
+
+
+def queue_team_detail_refresh(team_id):
+    season = get_current_season()
+    fetch_queue.update_one(
+        {"job_type": "team_detail_refresh", "team_id": int(team_id), "season": season},
+        {
+            "$set": {
+                "job_type": "team_detail_refresh",
+                "team_id": int(team_id),
+                "season": season,
+                "name": f"Team {team_id}",
+                "refresh": True,
+                "queued_at": datetime.now(UTC),
+                "next_attempt_at": datetime.now(UTC),
+            }
+        },
+        upsert=True,
+    )
+    return season
+
 def normalize_origin(origin: str) -> str:
     return origin.strip().rstrip("/")
 
@@ -96,7 +144,10 @@ def teams():
 @app.get("/api/teams/{team_id}/summary")
 def get_team_summary(team_id: int):
     try:
-        return get_cached_team_summary(team_id)
+        summary = get_cached_team_summary(team_id)
+        if should_queue_team_detail_refresh(summary):
+            queue_team_detail_refresh(team_id)
+        return summary
     except HTTPException as exc:
         fetch_queue.update_one(
             {"job_type": "team_refresh"},
@@ -116,22 +167,7 @@ def get_team_summary(team_id: int):
 @app.post("/teams/{team_id}/refresh")
 @app.post("/api/teams/{team_id}/refresh")
 def refresh_team_summary(team_id: int):
-    season = get_current_season()
-    fetch_queue.update_one(
-        {"job_type": "team_detail_refresh", "team_id": int(team_id), "season": season},
-        {
-            "$set": {
-                "job_type": "team_detail_refresh",
-                "team_id": int(team_id),
-                "season": season,
-                "name": f"Team {team_id}",
-                "refresh": True,
-                "queued_at": datetime.now(UTC),
-                "next_attempt_at": datetime.now(UTC),
-            }
-        },
-        upsert=True,
-    )
+    season = queue_team_detail_refresh(team_id)
     return {"queued": True, "team_id": int(team_id), "season": season}
 
 

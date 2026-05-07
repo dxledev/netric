@@ -6,10 +6,12 @@ VENV=venv
 PYTHON=$(VENV)/bin/python
 PIP=$(VENV)/bin/pip
 UVICORN=$(VENV)/bin/uvicorn
+DEV_ENV=MONGO_INIT_RETRIES=1 MONGO_CONNECT_TIMEOUT_MS=2000 MONGO_SERVER_SELECTION_TIMEOUT_MS=3000 MONGO_INIT_RETRY_DELAY_SECONDS=1
 
 APP=main:app
 HOST=127.0.0.1
 PORT=8000
+PIDFILE=uvicorn.pid
 SERVICE=netric-backend.service
 HEALTH_URL=http://$(HOST):$(PORT)/openapi.json
 PROXY_HEALTH_URL=http://127.0.0.1/api/openapi.json
@@ -36,18 +38,35 @@ install:
 # Run development server
 # -------------------------
 run:
-	nohup $(UVICORN) $(APP) --host $(HOST) --port $(PORT) > uvicorn.log 2>&1 &
+	@nohup env $(DEV_ENV) $(UVICORN) $(APP) --host $(HOST) --port $(PORT) > uvicorn.log 2>&1 & echo $$! > $(PIDFILE)
+	@echo "Backend started on $(HOST):$(PORT) with PID $$(cat $(PIDFILE))"
 
 # -------------------------
 # Reload server (restart dev server)
 # -------------------------
 reload:
-	@if systemctl list-unit-files "$(SERVICE)" 2>/dev/null | grep -q "^$(SERVICE)"; then \
-		sudo systemctl restart "$(SERVICE)"; \
-		sudo systemctl --no-pager --lines=20 status "$(SERVICE)"; \
+	@if timeout 3 systemctl list-unit-files "$(SERVICE)" 2>/dev/null | grep -q "^$(SERVICE)" && sudo -n true 2>/dev/null; then \
+		sudo -n systemctl restart "$(SERVICE)"; \
+		sudo -n systemctl --no-pager --lines=20 status "$(SERVICE)" || true; \
 	else \
-		pkill -f "$(UVICORN) $(APP)" || true; \
-		nohup $(UVICORN) $(APP) --host $(HOST) --port $(PORT) > uvicorn.log 2>&1 & \
+		if [ -f "$(PIDFILE)" ]; then \
+			pid=$$(cat "$(PIDFILE)"); \
+			if kill -0 "$$pid" 2>/dev/null; then \
+				kill "$$pid" 2>/dev/null || true; \
+				i=1; \
+				while kill -0 "$$pid" 2>/dev/null; do \
+					if [ $$i -ge 10 ]; then \
+						kill -9 "$$pid" 2>/dev/null || true; \
+						break; \
+					fi; \
+					sleep 1; \
+					i=$$((i + 1)); \
+				done; \
+			fi; \
+			rm -f "$(PIDFILE)"; \
+		fi; \
+		nohup env $(DEV_ENV) $(UVICORN) $(APP) --host $(HOST) --port $(PORT) > uvicorn.log 2>&1 & echo $$! > "$(PIDFILE)"; \
+		echo "Backend restarted on $(HOST):$(PORT) with PID $$(cat $(PIDFILE))"; \
 	fi
 	@$(MAKE) health
 	@if systemctl is-active --quiet nginx 2>/dev/null; then \

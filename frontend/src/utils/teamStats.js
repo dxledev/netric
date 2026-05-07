@@ -20,11 +20,11 @@ export const PLAYER_TEAM_STATS = [
   { key: "ts_pct", label: "TS%", type: "percentage" },
 ]
 
-export function formatTeamValue(value, type = "number") {
+export function formatTeamValue(value, type = "number", fallback = "N/A") {
   const numberValue = Number(value)
 
   if (!Number.isFinite(numberValue)) {
-    return "-"
+    return fallback
   }
 
   if (type === "percentage") {
@@ -35,19 +35,21 @@ export function formatTeamValue(value, type = "number") {
 }
 
 export function getPlayerScopeStats(player, postseason, includePlayIn) {
+  const normalizeStats = stats => (toNumber(stats?.gp) > 0 ? stats : null)
+
   if (postseason && includePlayIn) {
     return combinePlayerStats(player?.postseason, player?.playin)
   }
 
   if (includePlayIn) {
-    return player?.playin || null
+    return normalizeStats(player?.playin)
   }
 
   if (postseason) {
-    return player?.postseason || null
+    return normalizeStats(player?.postseason)
   }
 
-  return player?.regular || null
+  return normalizeStats(player?.regular)
 }
 
 function toNumber(value) {

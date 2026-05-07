@@ -28,6 +28,19 @@ STANDINGS_SUMMARY_VERSION = 1
 NBA_API_TIMEOUT_SECONDS = int(os.getenv("NBA_API_TIMEOUT_SECONDS", "60"))
 NBA_API_RETRY_ATTEMPTS = int(os.getenv("NBA_API_RETRY_ATTEMPTS", "3"))
 NBA_API_RETRY_DELAY_SECONDS = float(os.getenv("NBA_API_RETRY_DELAY_SECONDS", "2"))
+EMPTY_PLAYER_STATS = {
+    "gp": 0,
+    "pts_total": 0.0,
+    "reb_total": 0.0,
+    "ast_total": 0.0,
+    "fgm": 0.0,
+    "fga": 0.0,
+    "fta": 0.0,
+    "pts": 0.0,
+    "reb": 0.0,
+    "ast": 0.0,
+    "ts_pct": 0.0,
+}
 
 TEAM_ABBREVIATION_BY_ID = {
     int(team["id"]): team["abbreviation"]
@@ -215,13 +228,19 @@ def run_with_retries(fetch_fn):
 def to_int(value, default=0):
     if value is None or pd.isna(value):
         return default
-    return int(float(value))
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def to_float(value, default=0.0):
     if value is None or pd.isna(value):
         return default
-    return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def get_value(row, *keys, default=None):
@@ -289,6 +308,52 @@ def normalize_last_game(game):
     }
 
 
+def parse_game_date(value):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+
+    for date_format in ("%Y-%m-%d", "%b %d, %Y", "%B %d, %Y"):
+        try:
+            return datetime.strptime(raw_value.title(), date_format)
+        except ValueError:
+            continue
+
+    return None
+
+
+def get_last_game_by_date(games):
+    normalized_games = [game for game in games if game]
+    if not normalized_games:
+        return None
+
+    return max(
+        normalized_games,
+        key=lambda game: parse_game_date(game.get("date")) or datetime.min,
+    )
+
+
+def fetch_team_game_log(team_id, season, season_type):
+    try:
+        gamelog = run_with_retries(
+            lambda: teamgamelog.TeamGameLog(
+                team_id=team_id,
+                season=season,
+                season_type_all_star=season_type,
+                timeout=NBA_API_TIMEOUT_SECONDS,
+            )
+        )
+    except KeyError as error:
+        if str(error).strip("'") == "resultSet":
+            return []
+        raise
+
+    return [
+        normalize_last_game(row)
+        for row in gamelog.get_data_frames()[0].to_dict("records")
+    ]
+
+
 def calculate_ts_pct(row):
     pts = to_float(row.get("PTS"))
     fga = to_float(row.get("FGA"))
@@ -335,10 +400,18 @@ def fetch_team_player_stats(team_id, season, season_type):
         raise
 
     frame = stats.get_data_frames()[0]
-    return {
-        int(row["PLAYER_ID"]): normalize_player_totals(row)
-        for _, row in frame.iterrows()
-    }
+    player_stats = {}
+    for _, row in frame.iterrows():
+        normalized_stats = normalize_player_totals(row)
+        player_id = to_int(row.get("PLAYER_ID"))
+        player_name_key = normalize_team_name_key(row.get("PLAYER_NAME") or row.get("PLAYER"))
+
+        if player_id:
+            player_stats[player_id] = normalized_stats
+        if player_name_key:
+            player_stats[player_name_key] = normalized_stats
+
+    return player_stats
 
 
 def fetch_all_player_stats_by_team(season, season_type):
@@ -409,9 +482,9 @@ def fetch_team_players(team_id, season, player_stats=None):
                 "name": str(row.get("PLAYER") or ""),
                 "jersey_number": str(row.get("NUM") or ""),
                 "position": str(row.get("POSITION") or ""),
-                "regular": regular_stats.get(player_id, {"pts": 0.0, "reb": 0.0, "ast": 0.0, "ts_pct": 0.0}),
-                "postseason": playoff_stats.get(player_id, {"pts": 0.0, "reb": 0.0, "ast": 0.0, "ts_pct": 0.0}),
-                "playin": playin_stats.get(player_id, {"pts": 0.0, "reb": 0.0, "ast": 0.0, "ts_pct": 0.0}),
+                "regular": regular_stats.get(player_id, EMPTY_PLAYER_STATS),
+                "postseason": playoff_stats.get(player_id, EMPTY_PLAYER_STATS),
+                "playin": playin_stats.get(player_id, EMPTY_PLAYER_STATS),
             }
         )
 
@@ -572,9 +645,33 @@ def index_bbr_player_stats(rows):
     return indexed
 
 
-def build_bbr_players(roster_rows, regular_rows, postseason_rows):
+def build_roster_player_id_index(team_id, season):
+    try:
+        roster = run_with_retries(
+            lambda: commonteamroster.CommonTeamRoster(
+                team_id=team_id,
+                season=season,
+                timeout=NBA_API_TIMEOUT_SECONDS,
+            )
+        )
+    except Exception:
+        return {}
+
+    indexed = {}
+    for _, row in roster.get_data_frames()[0].iterrows():
+        player_id = to_int(row.get("PLAYER_ID"))
+        player_name_key = normalize_team_name_key(row.get("PLAYER"))
+        if player_id and player_name_key:
+            indexed[player_name_key] = player_id
+
+    return indexed
+
+
+def build_bbr_players(roster_rows, regular_rows, postseason_rows, playin_stats=None, roster_player_ids=None):
     regular_stats = index_bbr_player_stats(regular_rows)
     postseason_stats = index_bbr_player_stats(postseason_rows)
+    playin_stats = playin_stats or {}
+    roster_player_ids = roster_player_ids or {}
     players = []
 
     for row in roster_rows:
@@ -583,27 +680,22 @@ def build_bbr_players(roster_rows, regular_rows, postseason_rows):
         if not player_key or not name:
             continue
 
-        empty_stats = {
-            "gp": 0,
-            "pts_total": 0.0,
-            "reb_total": 0.0,
-            "ast_total": 0.0,
-            "fga": 0.0,
-            "fta": 0.0,
-            "pts": 0.0,
-            "reb": 0.0,
-            "ast": 0.0,
-            "ts_pct": 0.0,
-        }
+        player_name_key = normalize_team_name_key(name)
+        nba_player_id = (
+            to_int(row.get("nba_id") or row.get("id"))
+            or roster_player_ids.get(player_name_key)
+            or to_int(row.get("player_id"))
+        )
         players.append(
             {
                 "player_id": player_key,
                 "name": name,
                 "jersey_number": str(row.get("number") or ""),
                 "position": str(row.get("pos") or ""),
-                "regular": regular_stats.get(player_key, empty_stats),
-                "postseason": postseason_stats.get(player_key, empty_stats),
-                "playin": empty_stats,
+                "regular": regular_stats.get(player_key, EMPTY_PLAYER_STATS),
+                "postseason": postseason_stats.get(player_key, EMPTY_PLAYER_STATS),
+                "playin": playin_stats.get(nba_player_id)
+                or playin_stats.get(player_name_key, EMPTY_PLAYER_STATS),
             }
         )
 
@@ -953,11 +1045,20 @@ def fetch_bbr_team_detail(team_id, season=None):
     regular_rows = parse_bbr_table(team_html, "per_game_stats")
     postseason_rows = parse_bbr_table(team_html, "per_game_stats_post")
     games_rows = parse_bbr_table(games_html, "games")
+    playin_stats = fetch_team_player_stats(team_id, season, "PlayIn")
+    roster_player_ids = build_roster_player_id_index(team_id, season)
+    regular_last_game = build_bbr_last_game(games_rows)
+    playoff_last_game = get_last_game_by_date(fetch_team_game_log(team_id, season, "Playoffs"))
+    playin_last_game = get_last_game_by_date(fetch_team_game_log(team_id, season, "PlayIn"))
 
     return {
-        "players": build_bbr_players(roster_rows, regular_rows, postseason_rows),
-        "last_game": build_bbr_last_game(games_rows),
+        "players": build_bbr_players(roster_rows, regular_rows, postseason_rows, playin_stats, roster_player_ids),
+        "last_game": get_last_game_by_date([regular_last_game, playoff_last_game, playin_last_game]),
+        "regular_last_game": regular_last_game,
+        "playoff_last_game": playoff_last_game,
+        "playin_last_game": playin_last_game,
         "schedule_summary": build_bbr_schedule_summary(games_rows),
+        "playin_player_stats_checked": True,
     }
 
 
@@ -971,6 +1072,9 @@ def store_bbr_team_detail(team_id, season=None):
             "$set": {
                 "players": detail["players"],
                 "last_game": detail["last_game"],
+                "regular_last_game": detail.get("regular_last_game"),
+                "playoff_last_game": detail.get("playoff_last_game"),
+                "playin_last_game": detail.get("playin_last_game"),
                 "win_streak": schedule_summary.get("streak", ""),
                 "updated_at": utc_now(),
                 "source": "basketball-reference",
@@ -1085,23 +1189,21 @@ def fetch_team_summary(team_id, season=None, standings=None, team_stats=None, pl
         team_identity["conference"] = standing["conference"]
         team_identity["name"] = standing["name"] or team_identity["name"]
 
-    gamelog = run_with_retries(
-        lambda: teamgamelog.TeamGameLog(
-            team_id=team_id,
-            season=season,
-            season_type_all_star="Regular Season",
-            timeout=NBA_API_TIMEOUT_SECONDS,
-        )
-    )
-    games = gamelog.get_data_frames()[0].to_dict("records")
+    regular_games = fetch_team_game_log(team_id, season, "Regular Season")
+    playoff_games = fetch_team_game_log(team_id, season, "Playoffs")
+    playin_games = fetch_team_game_log(team_id, season, "PlayIn")
 
     return {
         "summary_version": TEAM_SUMMARY_VERSION,
         "season": season,
         "team": team_identity,
         "stats": normalize_team_stats(base_rows.get(team_id, {}), opponent_rows.get(team_id, {})),
-        "last_game": normalize_last_game(games[0] if games else None),
+        "last_game": get_last_game_by_date([*regular_games, *playoff_games, *playin_games]),
+        "regular_last_game": get_last_game_by_date(regular_games),
+        "playoff_last_game": get_last_game_by_date(playoff_games),
+        "playin_last_game": get_last_game_by_date(playin_games),
         "players": fetch_team_players(team_id, season, player_stats),
+        "playin_player_stats_checked": True,
         "record": standing["record"] if standing else "",
         "win_streak": standing["streak"] if standing else "",
         "standing": standing["standing_label"] if standing else "",
