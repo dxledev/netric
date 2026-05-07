@@ -19,14 +19,16 @@ from nba_api.stats.endpoints import (
 )
 from nba_api.stats.static import teams
 
-from database import player_cache_collection, standings_cache_collection, team_cache_collection
+from database import game_cache_collection, player_cache_collection, standings_cache_collection, team_cache_collection
 
 team_cache = team_cache_collection
 standings_cache = standings_cache_collection
 player_cache = player_cache_collection
+game_cache = game_cache_collection
 
 TEAM_SUMMARY_VERSION = 1
 STANDINGS_SUMMARY_VERSION = 1
+GAME_LOG_SUMMARY_VERSION = 1
 NBA_API_TIMEOUT_SECONDS = int(os.getenv("NBA_API_TIMEOUT_SECONDS", "60"))
 NBA_API_RETRY_ATTEMPTS = int(os.getenv("NBA_API_RETRY_ATTEMPTS", "3"))
 NBA_API_RETRY_DELAY_SECONDS = float(os.getenv("NBA_API_RETRY_DELAY_SECONDS", "2"))
@@ -614,8 +616,44 @@ def finalize_team_box(team_box):
     return team_box
 
 
+def get_stored_full_game_log(game_id, season=None):
+    query = {
+        "game_id": str(game_id or "").strip(),
+        "summary_version": GAME_LOG_SUMMARY_VERSION,
+    }
+    if season:
+        query["season"] = str(season)
+
+    return game_cache.find_one(
+        query,
+        {"_id": 0, "last_updated": 0, "summary_version": 0},
+        sort=[("last_updated", -1)],
+    )
+
+
+def store_cached_full_game_log(summary):
+    if not summary:
+        return summary
+
+    game_cache.update_one(
+        {
+            "game_id": summary["game_id"],
+            "season": summary.get("season") or "",
+        },
+        {
+            "$set": {
+                **summary,
+                "summary_version": GAME_LOG_SUMMARY_VERSION,
+                "last_updated": utc_now(),
+            }
+        },
+        upsert=True,
+    )
+    return summary
+
+
 @lru_cache(maxsize=256)
-def build_cached_full_game_log(game_id, season=None):
+def build_full_game_log_from_player_cache(game_id, season=None):
     game_id = str(game_id or "").strip()
     if not game_id:
         raise HTTPException(status_code=404, detail="Game not found.")
@@ -670,6 +708,19 @@ def build_cached_full_game_log(game_id, season=None):
         "matchup": matchup,
         "teams": teams_list,
     }
+
+
+def build_cached_full_game_log(game_id, season=None):
+    game_id = str(game_id or "").strip()
+    if not game_id:
+        raise HTTPException(status_code=404, detail="Game not found.")
+
+    stored_game = get_stored_full_game_log(game_id, season)
+    if stored_game:
+        return stored_game
+
+    summary = build_full_game_log_from_player_cache(game_id, season)
+    return store_cached_full_game_log(summary)
 
 
 def build_cached_game_score(game, team_abbreviation, season=None):

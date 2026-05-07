@@ -43,7 +43,10 @@ export default function FullGameLog() {
     setLoading(true)
 
     axios
-      .get(`${API_BASE}/games/${gameId}/summary`, { params: season ? { season } : {} })
+      .get(`${API_BASE}/games/${gameId}/summary`, {
+        params: season ? { season } : {},
+        timeout: 15000,
+      })
       .then(res => {
         if (!ignore) {
           setGame(res.data)
@@ -52,7 +55,11 @@ export default function FullGameLog() {
       })
       .catch(err => {
         if (!ignore) {
-          setError(err?.response?.status === 404 ? "Game log is not cached yet." : "Unable to load game log.")
+          if (err?.code === "ECONNABORTED") {
+            setError("Game log request timed out. The cached game summary is not responding yet.")
+          } else {
+            setError(err?.response?.status === 404 ? "Game log is not cached yet." : "Unable to load game log.")
+          }
           console.error(err)
         }
       })

@@ -52,7 +52,8 @@ export default function TeamInfo() {
   ), [includePlayIn, postseason, summary])
 
   function getGameLogPath(game) {
-    if (!game?.game_id) {
+    const gameId = String(game?.game_id || "").trim()
+    if (!/^\d{10}$/.test(gameId)) {
       return null
     }
 
@@ -65,7 +66,7 @@ export default function TeamInfo() {
     }
 
     const query = params.toString()
-    return `/games/${game.game_id}${query ? `?${query}` : ""}`
+    return `/games/${gameId}${query ? `?${query}` : ""}`
   }
 
   return (
