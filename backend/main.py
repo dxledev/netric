@@ -32,7 +32,7 @@ from auth import (
 )
 
 from database import fetch_queue_collection, player_cache_collection
-from services.team_service import get_cached_standings, get_cached_team_summary, get_current_season, list_teams
+from services.team_service import build_cached_full_game_log, get_cached_standings, get_cached_team_summary, get_current_season, list_teams
 
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -201,6 +201,12 @@ def standings():
             upsert=True,
         )
         raise exc
+
+
+@app.get("/games/{game_id}/summary")
+@app.get("/api/games/{game_id}/summary")
+def game_summary(game_id: str, season: str = None):
+    return build_cached_full_game_log(game_id, season)
 
 # ---------------------------
 # AUTH

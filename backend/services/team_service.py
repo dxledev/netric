@@ -1,6 +1,7 @@
 import os
 import re
 import time
+from functools import lru_cache
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -437,6 +438,27 @@ def find_cached_player_by_name(name):
     return None
 
 
+def build_cached_players_by_name():
+    indexed = {}
+    for player in player_cache.find(
+        {},
+        {
+            "_id": 0,
+            "player_id": 1,
+            "data.name": 1,
+            "data.career_stats": 1,
+            "data.playoff_career_stats": 1,
+            "data.playin_season_game_logs": 1,
+            "summary.playin_last_game": 1,
+            "summary.playoff_last_game": 1,
+        },
+    ):
+        player_name_key = normalize_team_name_key((player.get("data") or {}).get("name"))
+        if player_name_key:
+            indexed[player_name_key] = player
+    return indexed
+
+
 def cached_player_totals(player_doc, season, team_id, stat_key):
     rows = (player_doc.get("data") or {}).get(stat_key) or []
     team_rows = [
@@ -468,6 +490,226 @@ def normalize_cached_player_last_game(game):
     }
 
 
+def get_cached_log_game_id(log):
+    return str(get_value(log, "game_id", "Game_ID", "GAME_ID", default="") or "")
+
+
+def get_cached_log_matchup(log):
+    return str(get_value(log, "matchup", "MATCHUP", default="") or "")
+
+
+def get_cached_log_date(log):
+    return str(get_value(log, "game_date", "GAME_DATE", "date", default="") or "")
+
+
+def get_cached_log_team_abbreviation(log):
+    matchup = get_cached_log_matchup(log).strip()
+    return matchup.split(" ", 1)[0].strip().upper() if matchup else ""
+
+
+def get_cached_log_opponent_abbreviation(log):
+    matchup = get_cached_log_matchup(log).strip().upper()
+    if " VS. " in matchup:
+        return matchup.split(" VS. ", 1)[1].split(" ", 1)[0].strip()
+    if " @ " in matchup:
+        return matchup.split(" @ ", 1)[1].split(" ", 1)[0].strip()
+    return ""
+
+
+def calculate_box_ts_pct(points, fga, fta):
+    attempts = to_float(fga) + 0.44 * to_float(fta)
+    return round(to_float(points) / (2 * attempts), 3) if attempts > 0 else 0.0
+
+
+def normalize_cached_box_player_log(player_doc, log):
+    points = to_int(get_value(log, "pts", "PTS", default=0))
+    fgm = to_int(get_value(log, "fgm", "FGM", default=0))
+    fga = to_int(get_value(log, "fga", "FGA", default=0))
+    ftm = to_int(get_value(log, "ftm", "FTM", default=0))
+    fta = to_int(get_value(log, "fta", "FTA", default=0))
+
+    return {
+        "player_id": int(player_doc.get("player_id") or 0),
+        "name": str((player_doc.get("data") or {}).get("name") or ""),
+        "min": str(get_value(log, "min", "MIN", default="") or ""),
+        "pts": points,
+        "reb": to_int(get_value(log, "reb", "REB", default=0)),
+        "ast": to_int(get_value(log, "ast", "AST", default=0)),
+        "stl": to_int(get_value(log, "stl", "STL", default=0)),
+        "blk": to_int(get_value(log, "blk", "BLK", default=0)),
+        "plus_minus": to_int(get_value(log, "plus_minus", "PLUS_MINUS", default=0)),
+        "fgm": fgm,
+        "fga": fga,
+        "fg_pct": to_float(get_value(log, "fg_pct", "FG_PCT", default=0)),
+        "three_pm": to_int(get_value(log, "three_pm", "FG3M", default=0)),
+        "three_pa": to_int(get_value(log, "three_pa", "FG3A", default=0)),
+        "fg3_pct": to_float(get_value(log, "fg3_pct", "FG3_PCT", default=0)),
+        "ftm": ftm,
+        "fta": fta,
+        "ft_pct": to_float(get_value(log, "ft_pct", "FT_PCT", default=0)),
+        "tov": to_int(get_value(log, "tov", "TOV", default=0)),
+        "pf": to_int(get_value(log, "pf", "PF", default=0)),
+        "oreb": to_int(get_value(log, "oreb", "OREB", default=0)),
+        "dreb": to_int(get_value(log, "dreb", "DREB", default=0)),
+        "ts_pct": calculate_box_ts_pct(points, fga, fta),
+    }
+
+
+def iter_cached_player_logs(player_doc, season=None):
+    data = player_doc.get("data") or {}
+    log_maps = [
+        data.get("season_game_logs") or {},
+        data.get("playoff_season_game_logs") or {},
+        data.get("playin_season_game_logs") or {},
+    ]
+
+    for log_map in log_maps:
+        for season_id, logs in log_map.items():
+            if season and str(season_id) != str(season):
+                continue
+            for log in logs or []:
+                yield str(season_id), log
+
+
+def build_empty_team_box(abbreviation):
+    return {
+        "abbreviation": abbreviation,
+        "score": 0,
+        "fgm": 0,
+        "fga": 0,
+        "fg_pct": 0.0,
+        "three_pm": 0,
+        "three_pa": 0,
+        "fg3_pct": 0.0,
+        "ftm": 0,
+        "fta": 0,
+        "ft_pct": 0.0,
+        "tov": 0,
+        "reb": 0,
+        "ast": 0,
+        "blk": 0,
+        "dreb": 0,
+        "oreb": 0,
+        "stl": 0,
+        "pf": 0,
+        "players": [],
+    }
+
+
+def add_player_to_team_box(team_box, player_log):
+    team_box["players"].append(player_log)
+    team_box["score"] += player_log["pts"]
+    for key in ["fgm", "fga", "three_pm", "three_pa", "ftm", "fta", "tov", "reb", "ast", "blk", "dreb", "oreb", "stl", "pf"]:
+        team_box[key] += to_int(player_log.get(key))
+
+
+def finalize_team_box(team_box):
+    fga = team_box["fga"]
+    three_pa = team_box["three_pa"]
+    fta = team_box["fta"]
+    team_box["fg_pct"] = round(team_box["fgm"] / fga, 3) if fga > 0 else 0.0
+    team_box["fg3_pct"] = round(team_box["three_pm"] / three_pa, 3) if three_pa > 0 else 0.0
+    team_box["ft_pct"] = round(team_box["ftm"] / fta, 3) if fta > 0 else 0.0
+    team_box["players"] = sorted(team_box["players"], key=lambda player: player.get("pts", 0), reverse=True)
+    return team_box
+
+
+@lru_cache(maxsize=256)
+def build_cached_full_game_log(game_id, season=None):
+    game_id = str(game_id or "").strip()
+    if not game_id:
+        raise HTTPException(status_code=404, detail="Game not found.")
+
+    team_boxes = {}
+    game_date = ""
+    matchup = ""
+    resolved_season = season or ""
+
+    for player_doc in player_cache.find(
+        {},
+        {
+            "_id": 0,
+            "player_id": 1,
+            "data.name": 1,
+            "data.season_game_logs": 1,
+            "data.playoff_season_game_logs": 1,
+            "data.playin_season_game_logs": 1,
+        },
+    ):
+        seen_player_game = False
+        for season_id, log in iter_cached_player_logs(player_doc, season):
+            if get_cached_log_game_id(log) != game_id:
+                continue
+            if seen_player_game:
+                continue
+            seen_player_game = True
+
+            abbreviation = get_cached_log_team_abbreviation(log)
+            if not abbreviation:
+                continue
+
+            if not game_date:
+                game_date = get_cached_log_date(log)
+            if not matchup:
+                matchup = get_cached_log_matchup(log)
+            if not resolved_season:
+                resolved_season = season_id
+
+            team_box = team_boxes.setdefault(abbreviation, build_empty_team_box(abbreviation))
+            add_player_to_team_box(team_box, normalize_cached_box_player_log(player_doc, log))
+
+    teams_list = [finalize_team_box(team_box) for team_box in team_boxes.values()]
+    teams_list = sorted(teams_list, key=lambda team_box: team_box["abbreviation"])
+    if not teams_list:
+        raise HTTPException(status_code=404, detail="Game not found in cached player logs.")
+
+    return {
+        "game_id": game_id,
+        "season": resolved_season,
+        "date": game_date,
+        "matchup": matchup,
+        "teams": teams_list,
+    }
+
+
+def build_cached_game_score(game, team_abbreviation, season=None):
+    if not game:
+        return ""
+    current_score = str(game.get("score") or "").strip()
+    if "-" in current_score:
+        return current_score
+
+    try:
+        full_game = build_cached_full_game_log(game.get("game_id"), season)
+    except HTTPException:
+        return current_score
+
+    target_abbreviation = str(team_abbreviation or "").upper()
+    opponent_abbreviation = get_cached_log_opponent_abbreviation({"matchup": game.get("matchup")})
+    target_team = next((team for team in full_game["teams"] if team["abbreviation"] == target_abbreviation), None)
+    opponent_team = next((team for team in full_game["teams"] if team["abbreviation"] == opponent_abbreviation), None)
+
+    if not target_team and len(full_game["teams"]) == 2:
+        target_team = next((team for team in full_game["teams"] if team["abbreviation"] in str(game.get("matchup") or "")), None)
+    if not opponent_team and target_team and len(full_game["teams"]) == 2:
+        opponent_team = next((team for team in full_game["teams"] if team["abbreviation"] != target_team["abbreviation"]), None)
+
+    if target_team and opponent_team:
+        return f"{target_team['score']}-{opponent_team['score']}"
+    if target_team:
+        return str(target_team["score"])
+    return current_score
+
+
+def fill_cached_last_game_score(game, team_abbreviation, season=None):
+    if not game:
+        return None
+    return {
+        **game,
+        "score": build_cached_game_score(game, team_abbreviation, season),
+    }
+
+
 def is_playoff_game_id(game):
     return str((game or {}).get("game_id") or "").startswith("004")
 
@@ -476,17 +718,36 @@ def is_playin_game_id(game):
     return str((game or {}).get("game_id") or "").startswith("005")
 
 
+def game_id_matches_season(game, season):
+    game_id = str((game or {}).get("game_id") or "")
+    if not game_id or not season:
+        return True
+    if len(game_id) < 5 or not game_id[:3].isdigit():
+        return True
+
+    season_start_year = str(season).split("-")[0]
+    return game_id[3:5] == season_start_year[-2:]
+
+
+def is_stale_postseason_game(game, season):
+    return (
+        (is_playoff_game_id(game) or is_playin_game_id(game))
+        and not game_id_matches_season(game, season)
+    )
+
+
 def build_local_cached_team_detail(team_id, season=None):
     season = season or get_current_season()
     team_id = int(team_id)
     cached_team = team_cache.find_one({"team_id": team_id, "season": season}, {"_id": 0}) or {}
     team_abbreviation = (cached_team.get("team") or build_team_identity(team_id)).get("abbreviation", "")
+    cached_players_by_name = build_cached_players_by_name()
     players = []
     playoff_last_games = []
     playin_last_games = []
 
     for player in cached_team.get("players") or []:
-        player_doc = find_cached_player_by_name(player.get("name"))
+        player_doc = cached_players_by_name.get(normalize_team_name_key(player.get("name")))
         if not player_doc:
             players.append(player)
             continue
@@ -498,12 +759,14 @@ def build_local_cached_team_detail(team_id, season=None):
         if (
             playoff_last_game
             and is_playoff_game_id(playoff_last_game)
+            and game_id_matches_season(playoff_last_game, season)
             and team_abbreviation in playoff_last_game.get("matchup", "")
         ):
             playoff_last_games.append(playoff_last_game)
         if (
             playin_last_game
             and is_playin_game_id(playin_last_game)
+            and game_id_matches_season(playin_last_game, season)
             and team_abbreviation in playin_last_game.get("matchup", "")
         ):
             playin_last_games.append(playin_last_game)
@@ -518,21 +781,42 @@ def build_local_cached_team_detail(team_id, season=None):
             }
         )
 
-    playoff_last_game = get_last_game_by_date(playoff_last_games)
-    playin_last_game = get_last_game_by_date(playin_last_games)
+    playoff_last_game = fill_cached_last_game_score(
+        get_last_game_by_date(playoff_last_games),
+        team_abbreviation,
+        season,
+    )
+    playin_last_game = fill_cached_last_game_score(
+        get_last_game_by_date(playin_last_games),
+        team_abbreviation,
+        season,
+    )
+    cached_regular_candidate = cached_team.get("regular_last_game") or cached_team.get("last_game")
+    if is_stale_postseason_game(cached_regular_candidate, season):
+        cached_regular_candidate = None
+    regular_last_game = fill_cached_last_game_score(
+        cached_regular_candidate,
+        team_abbreviation,
+        season,
+    )
+    cached_playin_last_game = (
+        fill_cached_last_game_score(cached_team.get("playin_last_game"), team_abbreviation, season)
+        if game_id_matches_season(cached_team.get("playin_last_game"), season)
+        else None
+    )
 
     return {
         "players": players,
         "last_game": get_last_game_by_date(
             [
-                cached_team.get("regular_last_game") or cached_team.get("last_game"),
+                regular_last_game,
                 playoff_last_game,
                 playin_last_game,
             ]
         ),
-        "regular_last_game": cached_team.get("regular_last_game"),
+        "regular_last_game": regular_last_game,
         "playoff_last_game": playoff_last_game,
-        "playin_last_game": playin_last_game or cached_team.get("playin_last_game"),
+        "playin_last_game": playin_last_game or cached_playin_last_game,
         "playin_player_stats_checked": True,
     }
 

@@ -51,6 +51,23 @@ export default function TeamInfo() {
     })
   ), [includePlayIn, postseason, summary])
 
+  function getGameLogPath(game) {
+    if (!game?.game_id) {
+      return null
+    }
+
+    const params = new URLSearchParams()
+    if (summary?.season) {
+      params.set("season", summary.season)
+    }
+    if (id) {
+      params.set("teamId", id)
+    }
+
+    const query = params.toString()
+    return `/games/${game.game_id}${query ? `?${query}` : ""}`
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
@@ -83,11 +100,22 @@ export default function TeamInfo() {
                   </button>
                 </div>
                 {summary.last_game && (
-                  <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Last Game</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{summary.last_game.outcome} {summary.last_game.score}</p>
-                    <p className="mt-1 text-sm text-slate-300">{summary.last_game.date} · {summary.last_game.matchup}</p>
-                  </div>
+                  getGameLogPath(summary.last_game) ? (
+                    <Link
+                      to={getGameLogPath(summary.last_game)}
+                      className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-300/30 hover:bg-slate-900"
+                    >
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Last Game</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{summary.last_game.outcome} {summary.last_game.score}</p>
+                      <p className="mt-1 text-sm text-slate-300">{summary.last_game.date} · {summary.last_game.matchup}</p>
+                    </Link>
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Last Game</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{summary.last_game.outcome} {summary.last_game.score}</p>
+                      <p className="mt-1 text-sm text-slate-300">{summary.last_game.date} · {summary.last_game.matchup}</p>
+                    </div>
+                  )
                 )}
               </div>
             </section>

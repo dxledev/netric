@@ -13,6 +13,7 @@ import StatHighs from "./pages/StatHighs"
 import Teams from "./pages/Teams"
 import TeamInfo from "./pages/TeamInfo"
 import Standings from "./pages/Standings"
+import FullGameLog from "./pages/FullGameLog"
 import { isAuthenticated } from "./auth"
 
 function ScrollToTop() {
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/compare" element={<PlayerComparison />} />
           <Route path="/teams" element={<Teams />} />
           <Route path="/teams/:id" element={<TeamInfo />} />
+          <Route path="/games/:gameId" element={<FullGameLog />} />
           <Route path="/standings" element={<Standings />} />
           <Route path="/player/:id" element={<PlayerInfo />} />
           <Route path="/player/:id/comments/:commentId/replies/:replyId" element={<PlayerReplyThread />} />
