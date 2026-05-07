@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import PlayerSummaryCard from "../components/PlayerSummaryCard"
-import TeamSummaryCard from "../components/TeamSummaryCard"
+import TeamFavoriteCard from "../components/TeamFavoriteCard"
 import { API_BASE } from "../api"
 import { readPlayerSummaryCache } from "../utils/playerSummaryCache"
 import { normalizeSearchFilter } from "../utils/searchText"
@@ -1119,7 +1119,7 @@ export default function Home() {
                             key={getTeamId(team)}
                             className="transform-gpu transition-all duration-300 ease-out animate-content-in"
                           >
-                            <TeamSummaryCard
+                            <TeamFavoriteCard
                               team={team}
                               onRemoved={handleTeamRemoved}
                               onMoveToTop={handleTeamMoveToTop}
