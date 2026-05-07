@@ -18,6 +18,8 @@ from services.team_service import (
     get_current_season,
     refresh_all_teams,
     store_bbr_team_detail,
+    store_local_cached_team_detail,
+    store_nba_team_detail,
 )
 
 player_cache = player_cache_collection
@@ -187,7 +189,15 @@ def process_team_detail_refresh_job(job):
     team_id = int(job["team_id"])
     season = job.get("season")
     print("Fetching team detail:", team_id)
-    detail = store_bbr_team_detail(team_id, season)
+    try:
+        detail = store_bbr_team_detail(team_id, season)
+    except BasketballReferenceRateLimit as error:
+        print(f"Basketball Reference limited team detail for {team_id}; falling back to NBA API: {error}")
+        try:
+            detail = store_nba_team_detail(team_id, season)
+        except Exception as fallback_error:
+            print(f"NBA API team detail failed for {team_id}; falling back to local player cache: {fallback_error}")
+            detail = store_local_cached_team_detail(team_id, season)
     print(f"Stored team detail: {team_id} ({len(detail.get('players', []))} players)")
     time.sleep(BBR_REQUEST_DELAY_SECONDS)
 

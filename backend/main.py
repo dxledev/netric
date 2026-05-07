@@ -56,14 +56,25 @@ def should_queue_team_detail_refresh(summary):
         standing_rank = None
 
     is_postseason_team = standing_rank is not None and standing_rank <= 10
+    is_playoff_team = standing_rank is not None and standing_rank <= 8
     needs_latest_game_fields = is_postseason_team and "regular_last_game" not in summary
+    needs_playoff_stats = (
+        is_playoff_team
+        and (
+            not summary.get("playoff_last_game")
+            or not player_scope_has_games(summary.get("players"), "postseason")
+        )
+    )
     needs_playin_stats = (
         standing_rank is not None
         and 7 <= standing_rank <= 10
-        and not player_scope_has_games(summary.get("players"), "playin")
+        and (
+            not summary.get("playin_last_game")
+            or not player_scope_has_games(summary.get("players"), "playin")
+        )
     )
 
-    return needs_latest_game_fields or needs_playin_stats
+    return needs_latest_game_fields or needs_playoff_stats or needs_playin_stats
 
 
 def queue_team_detail_refresh(team_id):

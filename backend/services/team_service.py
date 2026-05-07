@@ -18,10 +18,11 @@ from nba_api.stats.endpoints import (
 )
 from nba_api.stats.static import teams
 
-from database import standings_cache_collection, team_cache_collection
+from database import player_cache_collection, standings_cache_collection, team_cache_collection
 
 team_cache = team_cache_collection
 standings_cache = standings_cache_collection
+player_cache = player_cache_collection
 
 TEAM_SUMMARY_VERSION = 1
 STANDINGS_SUMMARY_VERSION = 1
@@ -381,6 +382,182 @@ def normalize_player_totals(row):
         "ast": round(ast / games_played, 1),
         "ts_pct": calculate_ts_pct(row),
     }
+
+
+def summarize_cached_game_logs(logs):
+    logs = logs or []
+    gp = len(logs)
+    if gp == 0:
+        return EMPTY_PLAYER_STATS
+
+    pts = sum(to_float(get_value(log, "pts", "PTS", default=0)) for log in logs)
+    reb = sum(to_float(get_value(log, "reb", "REB", default=0)) for log in logs)
+    ast = sum(to_float(get_value(log, "ast", "AST", default=0)) for log in logs)
+    fgm = sum(to_float(get_value(log, "fgm", "FGM", default=0)) for log in logs)
+    fga = sum(to_float(get_value(log, "fga", "FGA", default=0)) for log in logs)
+    fta = sum(to_float(get_value(log, "fta", "FTA", default=0)) for log in logs)
+    attempts = fga + 0.44 * fta
+
+    return {
+        "gp": gp,
+        "pts_total": pts,
+        "reb_total": reb,
+        "ast_total": ast,
+        "fgm": fgm,
+        "fga": fga,
+        "fta": fta,
+        "pts": round(pts / gp, 1),
+        "reb": round(reb / gp, 1),
+        "ast": round(ast / gp, 1),
+        "ts_pct": round(pts / (2 * attempts), 3) if attempts > 0 else 0.0,
+    }
+
+
+def find_cached_player_by_name(name):
+    player_name_key = normalize_team_name_key(name)
+    if not player_name_key:
+        return None
+
+    for player in player_cache.find(
+        {},
+        {
+            "_id": 0,
+            "player_id": 1,
+            "data.name": 1,
+            "data.career_stats": 1,
+            "data.playoff_career_stats": 1,
+            "data.playin_season_game_logs": 1,
+            "summary.playin_last_game": 1,
+            "summary.playoff_last_game": 1,
+        },
+    ):
+        if normalize_team_name_key((player.get("data") or {}).get("name")) == player_name_key:
+            return player
+
+    return None
+
+
+def cached_player_totals(player_doc, season, team_id, stat_key):
+    rows = (player_doc.get("data") or {}).get(stat_key) or []
+    team_rows = [
+        row
+        for row in rows
+        if str(row.get("SEASON_ID")) == str(season) and to_int(row.get("TEAM_ID")) == int(team_id)
+    ]
+    if not team_rows:
+        return EMPTY_PLAYER_STATS
+
+    return normalize_player_totals(team_rows[-1])
+
+
+def cached_player_playin_totals(player_doc, season):
+    logs = ((player_doc.get("data") or {}).get("playin_season_game_logs") or {}).get(str(season), [])
+    return summarize_cached_game_logs(logs)
+
+
+def normalize_cached_player_last_game(game):
+    if not game:
+        return None
+
+    return {
+        "game_id": str(game.get("game_id") or ""),
+        "score": "",
+        "date": str(game.get("game_date") or game.get("date") or ""),
+        "matchup": str(game.get("matchup") or ""),
+        "outcome": str(game.get("result") or ""),
+    }
+
+
+def is_playoff_game_id(game):
+    return str((game or {}).get("game_id") or "").startswith("004")
+
+
+def is_playin_game_id(game):
+    return str((game or {}).get("game_id") or "").startswith("005")
+
+
+def build_local_cached_team_detail(team_id, season=None):
+    season = season or get_current_season()
+    team_id = int(team_id)
+    cached_team = team_cache.find_one({"team_id": team_id, "season": season}, {"_id": 0}) or {}
+    team_abbreviation = (cached_team.get("team") or build_team_identity(team_id)).get("abbreviation", "")
+    players = []
+    playoff_last_games = []
+    playin_last_games = []
+
+    for player in cached_team.get("players") or []:
+        player_doc = find_cached_player_by_name(player.get("name"))
+        if not player_doc:
+            players.append(player)
+            continue
+
+        summary = player_doc.get("summary") or {}
+        playoff_last_game = normalize_cached_player_last_game(summary.get("playoff_last_game"))
+        playin_last_game = normalize_cached_player_last_game(summary.get("playin_last_game"))
+
+        if (
+            playoff_last_game
+            and is_playoff_game_id(playoff_last_game)
+            and team_abbreviation in playoff_last_game.get("matchup", "")
+        ):
+            playoff_last_games.append(playoff_last_game)
+        if (
+            playin_last_game
+            and is_playin_game_id(playin_last_game)
+            and team_abbreviation in playin_last_game.get("matchup", "")
+        ):
+            playin_last_games.append(playin_last_game)
+
+        players.append(
+            {
+                **player,
+                "player_id": player_doc.get("player_id") or player.get("player_id"),
+                "regular": cached_player_totals(player_doc, season, team_id, "career_stats"),
+                "postseason": cached_player_totals(player_doc, season, team_id, "playoff_career_stats"),
+                "playin": cached_player_playin_totals(player_doc, season),
+            }
+        )
+
+    playoff_last_game = get_last_game_by_date(playoff_last_games)
+    playin_last_game = get_last_game_by_date(playin_last_games)
+
+    return {
+        "players": players,
+        "last_game": get_last_game_by_date(
+            [
+                cached_team.get("regular_last_game") or cached_team.get("last_game"),
+                playoff_last_game,
+                playin_last_game,
+            ]
+        ),
+        "regular_last_game": cached_team.get("regular_last_game"),
+        "playoff_last_game": playoff_last_game,
+        "playin_last_game": playin_last_game or cached_team.get("playin_last_game"),
+        "playin_player_stats_checked": True,
+    }
+
+
+def store_local_cached_team_detail(team_id, season=None):
+    season = season or get_current_season()
+    team_id = int(team_id)
+    detail = build_local_cached_team_detail(team_id, season)
+    team_cache.update_one(
+        {"team_id": team_id, "season": season},
+        {
+            "$set": {
+                "players": detail["players"],
+                "last_game": detail["last_game"],
+                "regular_last_game": detail.get("regular_last_game"),
+                "playoff_last_game": detail.get("playoff_last_game"),
+                "playin_last_game": detail.get("playin_last_game"),
+                "playin_player_stats_checked": True,
+                "updated_at": utc_now(),
+                "source": "local-player-cache",
+                "seeded_without_live_stats": False,
+            }
+        },
+    )
+    return detail
 
 
 def fetch_team_player_stats(team_id, season, season_type):
@@ -1117,6 +1294,59 @@ def store_bbr_team_detail(team_id, season=None):
                 "updated_at": utc_now(),
             }
         },
+    )
+    return detail
+
+
+def fetch_nba_team_detail(team_id, season=None):
+    season = season or get_current_season()
+    team_id = int(team_id)
+    regular_games = fetch_team_game_log(team_id, season, "Regular Season")
+    playoff_games = fetch_team_game_log(team_id, season, "Playoffs")
+    playin_games = fetch_team_game_log(team_id, season, "PlayIn")
+
+    return {
+        "players": fetch_team_players(team_id, season),
+        "last_game": get_last_game_by_date([*regular_games, *playoff_games, *playin_games]),
+        "regular_last_game": get_last_game_by_date(regular_games),
+        "playoff_last_game": get_last_game_by_date(playoff_games),
+        "playin_last_game": get_last_game_by_date(playin_games),
+        "playin_player_stats_checked": True,
+    }
+
+
+def store_nba_team_detail(team_id, season=None):
+    season = season or get_current_season()
+    team_id = int(team_id)
+    detail = fetch_nba_team_detail(team_id, season)
+    team_cache.update_one(
+        {"team_id": team_id, "season": season},
+        {
+            "$set": {
+                "players": detail["players"],
+                "last_game": detail["last_game"],
+                "regular_last_game": detail.get("regular_last_game"),
+                "playoff_last_game": detail.get("playoff_last_game"),
+                "playin_last_game": detail.get("playin_last_game"),
+                "playin_player_stats_checked": True,
+                "updated_at": utc_now(),
+                "source": "nba-api",
+                "seeded_without_live_stats": False,
+            },
+            "$setOnInsert": {
+                "team_id": team_id,
+                "season": season,
+                "summary_version": TEAM_SUMMARY_VERSION,
+                "team": build_team_identity(team_id),
+                "stats": {},
+                "record": "",
+                "win_streak": "",
+                "standing": "",
+                "standing_rank": None,
+                "conference": "",
+            },
+        },
+        upsert=True,
     )
     return detail
 
