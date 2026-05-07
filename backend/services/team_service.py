@@ -634,6 +634,27 @@ def build_bbr_last_game(games_rows):
     }
 
 
+def build_bbr_schedule_summary(games_rows):
+    completed_games = [
+        row
+        for row in games_rows
+        if str(row.get("game_result") or "").strip() in {"W", "L"}
+    ]
+    last_ten = completed_games[-10:]
+    last_ten_wins = sum(1 for row in last_ten if row.get("game_result") == "W")
+    home_games = [row for row in completed_games if not str(row.get("game_location") or "").strip()]
+    away_games = [row for row in completed_games if str(row.get("game_location") or "").strip() == "@"]
+    home_wins = sum(1 for row in home_games if row.get("game_result") == "W")
+    away_wins = sum(1 for row in away_games if row.get("game_result") == "W")
+
+    return {
+        "l10": f"{last_ten_wins}-{len(last_ten) - last_ten_wins}" if last_ten else "",
+        "streak": normalize_bbr_streak(completed_games[-1].get("game_streak")) if completed_games else "",
+        "home_record": f"{home_wins}-{len(home_games) - home_wins}" if home_games else "",
+        "away_record": f"{away_wins}-{len(away_games) - away_wins}" if away_games else "",
+    }
+
+
 def ordinal_suffix(value):
     if 10 <= value % 100 <= 20:
         return "th"
@@ -708,11 +729,78 @@ def fetch_playoff_picture(season):
     }
 
 
+def fetch_playoff_picture_enrichment(season):
+    try:
+        picture = run_with_retries(
+            lambda: playoffpicture.PlayoffPicture(
+                season_id=get_season_id_for_playoff_picture(season),
+                timeout=NBA_API_TIMEOUT_SECONDS,
+            )
+        )
+        frames = picture.get_data_frames()
+    except Exception:
+        return {}, {"rounds": [
+            {"name": "Round One", "series": []},
+            {"name": "Conf. Semis", "series": []},
+            {"name": "Conf. Finals", "series": []},
+            {"name": "Finals", "series": []},
+        ]}
+
+    standings_by_team_id = {}
+    for frame in frames:
+        columns = set(frame.columns)
+        if not {"TEAM_ID", "HOME", "AWAY"}.issubset(columns):
+            continue
+        for _, row in frame.iterrows():
+            team_id = to_int(row.get("TEAM_ID"))
+            if not team_id:
+                continue
+            standings_by_team_id[team_id] = {
+                "home_record": normalize_record(row.get("HOME")),
+                "away_record": normalize_record(row.get("AWAY")),
+                "clinched_playoffs": bool(to_float(row.get("CLINCHED_PLAYOFFS"), 0.0)),
+            }
+
+    round_one = []
+    for frame in frames:
+        columns = set(frame.columns)
+        if not {"HIGH_SEED_TEAM", "LOW_SEED_TEAM", "HIGH_SEED_TEAM_ID", "LOW_SEED_TEAM_ID"}.issubset(columns):
+            continue
+        for _, row in frame.iterrows():
+            high_team = str(row.get("HIGH_SEED_TEAM") or "").strip()
+            low_team = str(row.get("LOW_SEED_TEAM") or "").strip()
+            if not high_team or not low_team:
+                continue
+            high_wins = to_int(row.get("HIGH_SEED_SERIES_W"))
+            high_losses = to_int(row.get("HIGH_SEED_SERIES_L"))
+            round_one.append(
+                {
+                    "round": "Round One",
+                    "conference": str(row.get("CONFERENCE") or ""),
+                    "higher_seed": f"{to_int(row.get('HIGH_SEED_RANK'))}. {high_team}",
+                    "higher_seed_team_id": to_int(row.get("HIGH_SEED_TEAM_ID")),
+                    "lower_seed": f"{to_int(row.get('LOW_SEED_RANK'))}. {low_team}",
+                    "lower_seed_team_id": to_int(row.get("LOW_SEED_TEAM_ID")),
+                    "series_score": f"{high_wins}-{high_losses}",
+                }
+            )
+
+    return standings_by_team_id, {
+        "rounds": [
+            {"name": "Round One", "series": round_one},
+            {"name": "Conf. Semis", "series": []},
+            {"name": "Conf. Finals", "series": []},
+            {"name": "Finals", "series": []},
+        ]
+    }
+
+
 def fetch_bbr_league_snapshot(season=None):
     season = season or get_current_season()
     bbr_year = get_bbr_season_year(season)
     league_html = fetch_bbr_html(f"/leagues/NBA_{bbr_year}.html")
     standings_html = fetch_bbr_html(f"/leagues/NBA_{bbr_year}_standings.html")
+    standings_enrichment, playoffs = fetch_playoff_picture_enrichment(season)
 
     team_rows = parse_bbr_table(league_html, "per_game-team")
     opponent_rows = parse_bbr_table(league_html, "per_game-opponent")
@@ -741,6 +829,11 @@ def fetch_bbr_league_snapshot(season=None):
             standing_row = build_bbr_standing_row(row, conference, rank, stats_by_team_id)
             if not standing_row:
                 continue
+            standing_row.update({
+                key: value
+                for key, value in standings_enrichment.get(standing_row["team_id"], {}).items()
+                if value not in {None, ""}
+            })
             bucket.append(standing_row)
             rank += 1
 
@@ -750,22 +843,47 @@ def fetch_bbr_league_snapshot(season=None):
         "updated_at": utc_now(),
         "east": east_rows,
         "west": west_rows,
-        "playoffs": {
-            "rounds": [
-                {"name": "Round One", "series": []},
-                {"name": "Conf. Semis", "series": []},
-                {"name": "Conf. Finals", "series": []},
-                {"name": "Finals", "series": []},
-            ]
-        },
+        "playoffs": playoffs,
         "source": "basketball-reference",
     }
 
     return standings_summary, stats_by_team_id
 
 
+def preserve_cached_standing_details(standings_summary):
+    cached = standings_cache.find_one({"season": standings_summary["season"]}, {"_id": 0})
+    if not cached:
+        return standings_summary
+
+    cached_rows = {
+        int(row["team_id"]): row
+        for row in [*cached.get("east", []), *cached.get("west", [])]
+        if row.get("team_id")
+    }
+    preserve_fields = ["l10", "streak", "home_record", "away_record"]
+
+    for conference in ["east", "west"]:
+        for row in standings_summary.get(conference, []):
+            cached_row = cached_rows.get(int(row.get("team_id", 0)))
+            if not cached_row:
+                continue
+            for field in preserve_fields:
+                if not row.get(field) and cached_row.get(field):
+                    row[field] = cached_row[field]
+
+    new_rounds = standings_summary.get("playoffs", {}).get("rounds", [])
+    has_new_series = any(round_item.get("series") for round_item in new_rounds)
+    cached_rounds = cached.get("playoffs", {}).get("rounds", [])
+    has_cached_series = any(round_item.get("series") for round_item in cached_rounds)
+    if not has_new_series and has_cached_series:
+        standings_summary["playoffs"] = cached["playoffs"]
+
+    return standings_summary
+
+
 def store_bbr_league_snapshot(season=None):
     standings_summary, stats_by_team_id = fetch_bbr_league_snapshot(season)
+    standings_summary = preserve_cached_standing_details(standings_summary)
     season = standings_summary["season"]
     standings_cache.update_one(
         {"season": season},
@@ -839,18 +957,21 @@ def fetch_bbr_team_detail(team_id, season=None):
     return {
         "players": build_bbr_players(roster_rows, regular_rows, postseason_rows),
         "last_game": build_bbr_last_game(games_rows),
+        "schedule_summary": build_bbr_schedule_summary(games_rows),
     }
 
 
 def store_bbr_team_detail(team_id, season=None):
     season = season or get_current_season()
     detail = fetch_bbr_team_detail(team_id, season)
+    schedule_summary = detail.get("schedule_summary") or {}
     team_cache.update_one(
         {"team_id": int(team_id), "season": season},
         {
             "$set": {
                 "players": detail["players"],
                 "last_game": detail["last_game"],
+                "win_streak": schedule_summary.get("streak", ""),
                 "updated_at": utc_now(),
                 "source": "basketball-reference",
                 "seeded_without_live_stats": False,
@@ -862,13 +983,36 @@ def store_bbr_team_detail(team_id, season=None):
                 "team": build_team_identity(team_id),
                 "stats": {},
                 "record": "",
-                "win_streak": "",
                 "standing": "",
                 "standing_rank": None,
                 "conference": "",
             },
         },
         upsert=True,
+    )
+    standings_cache.update_one(
+        {"season": season, "east.team_id": int(team_id)},
+        {
+            "$set": {
+                "east.$.l10": schedule_summary.get("l10", ""),
+                "east.$.streak": schedule_summary.get("streak", ""),
+                "east.$.home_record": schedule_summary.get("home_record", ""),
+                "east.$.away_record": schedule_summary.get("away_record", ""),
+                "updated_at": utc_now(),
+            }
+        },
+    )
+    standings_cache.update_one(
+        {"season": season, "west.team_id": int(team_id)},
+        {
+            "$set": {
+                "west.$.l10": schedule_summary.get("l10", ""),
+                "west.$.streak": schedule_summary.get("streak", ""),
+                "west.$.home_record": schedule_summary.get("home_record", ""),
+                "west.$.away_record": schedule_summary.get("away_record", ""),
+                "updated_at": utc_now(),
+            }
+        },
     )
     return detail
 

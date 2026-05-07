@@ -5,8 +5,15 @@ from refresh_audit import run_refresh_audit_from_env
 
 def main():
     print("Nightly refresh started.")
-    refresh_all_players()
-    refresh_all_teams()
+    try:
+        refresh_all_players()
+    except Exception as error:
+        print(f"Player refresh scheduling failed: {error}")
+
+    try:
+        refresh_all_teams()
+    except Exception as error:
+        print(f"Team refresh scheduling failed: {error}")
 
     total_processed = 0
 
