@@ -8,3 +8,6 @@ __pycache__/
 *.pyc
 nohup.out
 backend/nohup.out
+linux-mint-machine
+linux-mint-machine.pub
+uvicorn.log
