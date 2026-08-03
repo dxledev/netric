@@ -198,6 +198,23 @@ def normalize_team_name_key(value):
     return re.sub(r"[^a-z0-9]", "", clean_bbr_team_name(value).lower())
 
 
+def normalize_player_name_keys(value):
+    clean_name = clean_bbr_team_name(value)
+    normalized_keys = [normalize_team_name_key(clean_name)]
+    without_suffix = re.sub(
+        r"\s+(jr\.?|sr\.?|ii|iii|iv|v)$",
+        "",
+        clean_name,
+        flags=re.IGNORECASE,
+    ).strip()
+    suffixless_key = normalize_team_name_key(without_suffix)
+
+    if suffixless_key and suffixless_key not in normalized_keys:
+        normalized_keys.append(suffixless_key)
+
+    return [key for key in normalized_keys if key]
+
+
 def get_team_id_by_name(name):
     clean_name = clean_bbr_team_name(name)
     aliased_name = TEAM_NAME_ALIASES.get(clean_name.lower(), clean_name)
@@ -417,8 +434,8 @@ def summarize_cached_game_logs(logs):
 
 
 def find_cached_player_by_name(name):
-    player_name_key = normalize_team_name_key(name)
-    if not player_name_key:
+    player_name_keys = normalize_player_name_keys(name)
+    if not player_name_keys:
         return None
 
     for player in player_cache.find(
@@ -434,7 +451,8 @@ def find_cached_player_by_name(name):
             "summary.playoff_last_game": 1,
         },
     ):
-        if normalize_team_name_key((player.get("data") or {}).get("name")) == player_name_key:
+        cached_name_keys = normalize_player_name_keys((player.get("data") or {}).get("name"))
+        if any(player_name_key in cached_name_keys for player_name_key in player_name_keys):
             return player
 
     return None
@@ -455,9 +473,12 @@ def build_cached_players_by_name():
             "summary.playoff_last_game": 1,
         },
     ):
-        player_name_key = normalize_team_name_key((player.get("data") or {}).get("name"))
-        if player_name_key:
-            indexed[player_name_key] = player
+        player_name_keys = normalize_player_name_keys((player.get("data") or {}).get("name"))
+        for index, player_name_key in enumerate(player_name_keys):
+            if index == 0:
+                indexed[player_name_key] = player
+            else:
+                indexed.setdefault(player_name_key, player)
     return indexed
 
 
@@ -798,7 +819,14 @@ def build_local_cached_team_detail(team_id, season=None):
     playin_last_games = []
 
     for player in cached_team.get("players") or []:
-        player_doc = cached_players_by_name.get(normalize_team_name_key(player.get("name")))
+        player_doc = next(
+            (
+                cached_players_by_name[player_name_key]
+                for player_name_key in normalize_player_name_keys(player.get("name"))
+                if player_name_key in cached_players_by_name
+            ),
+            None,
+        )
         if not player_doc:
             players.append(player)
             continue
@@ -916,11 +944,11 @@ def fetch_team_player_stats(team_id, season, season_type):
     for _, row in frame.iterrows():
         normalized_stats = normalize_player_totals(row)
         player_id = to_int(row.get("PLAYER_ID"))
-        player_name_key = normalize_team_name_key(row.get("PLAYER_NAME") or row.get("PLAYER"))
+        player_name_keys = normalize_player_name_keys(row.get("PLAYER_NAME") or row.get("PLAYER"))
 
         if player_id:
             player_stats[player_id] = normalized_stats
-        if player_name_key:
+        for player_name_key in player_name_keys:
             player_stats[player_name_key] = normalized_stats
 
     return player_stats
@@ -1172,9 +1200,10 @@ def build_roster_player_id_index(team_id, season):
     indexed = {}
     for _, row in roster.get_data_frames()[0].iterrows():
         player_id = to_int(row.get("PLAYER_ID"))
-        player_name_key = normalize_team_name_key(row.get("PLAYER"))
-        if player_id and player_name_key:
-            indexed[player_name_key] = player_id
+        player_name_keys = normalize_player_name_keys(row.get("PLAYER"))
+        if player_id:
+            for player_name_key in player_name_keys:
+                indexed.setdefault(player_name_key, player_id)
 
     return indexed
 
@@ -1192,22 +1221,36 @@ def build_bbr_players(roster_rows, regular_rows, postseason_rows, playin_stats=N
         if not player_key or not name:
             continue
 
-        player_name_key = normalize_team_name_key(name)
+        player_name_keys = normalize_player_name_keys(name)
         nba_player_id = (
             to_int(row.get("nba_id") or row.get("id"))
-            or roster_player_ids.get(player_name_key)
+            or next(
+                (
+                    roster_player_ids[player_name_key]
+                    for player_name_key in player_name_keys
+                    if player_name_key in roster_player_ids
+                ),
+                0,
+            )
             or to_int(row.get("player_id"))
+        )
+        playin_row = playin_stats.get(nba_player_id) or next(
+            (
+                playin_stats[player_name_key]
+                for player_name_key in player_name_keys
+                if player_name_key in playin_stats
+            ),
+            EMPTY_PLAYER_STATS,
         )
         players.append(
             {
-                "player_id": player_key,
+                "player_id": nba_player_id or player_key,
                 "name": name,
                 "jersey_number": str(row.get("number") or ""),
                 "position": str(row.get("pos") or ""),
                 "regular": regular_stats.get(player_key, EMPTY_PLAYER_STATS),
                 "postseason": postseason_stats.get(player_key, EMPTY_PLAYER_STATS),
-                "playin": playin_stats.get(nba_player_id)
-                or playin_stats.get(player_name_key, EMPTY_PLAYER_STATS),
+                "playin": playin_row,
             }
         )
 
@@ -1792,11 +1835,52 @@ def refresh_all_teams(season=None):
     return store_bbr_league_snapshot(season)["teams"]
 
 
+def hydrate_cached_team_player_routes(summary):
+    players = summary.get("players") or []
+    if not any(player.get("player_id") and not to_int(player.get("player_id")) for player in players):
+        return summary
+
+    cached_players_by_name = build_cached_players_by_name()
+    hydrated_players = []
+    changed = False
+
+    for player in players:
+        player_id = player.get("player_id")
+        if to_int(player_id):
+            hydrated_players.append(player)
+            continue
+
+        player_doc = next(
+            (
+                cached_players_by_name[player_name_key]
+                for player_name_key in normalize_player_name_keys(player.get("name"))
+                if player_name_key in cached_players_by_name
+            ),
+            None,
+        )
+
+        if not player_doc or not to_int(player_doc.get("player_id")):
+            hydrated_players.append(player)
+            continue
+
+        official_name = (player_doc.get("data") or {}).get("name") or player.get("name")
+        hydrated_players.append(
+            {
+                **player,
+                "player_id": int(player_doc["player_id"]),
+                "name": official_name,
+            }
+        )
+        changed = True
+
+    return {**summary, "players": hydrated_players} if changed else summary
+
+
 def get_cached_team_summary(team_id, season=None):
     season = season or get_current_season()
     cached = team_cache.find_one({"team_id": int(team_id), "season": season}, {"_id": 0})
     if cached:
-        return cached
+        return hydrate_cached_team_player_routes(cached)
 
     raise HTTPException(status_code=404, detail="Team not cached yet.")
 
