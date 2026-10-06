@@ -6,6 +6,8 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+User=__NETRIC_USER__
+Group=__NETRIC_GROUP__
 WorkingDirectory=__NETRIC_BACKEND_DIR__
 Environment=PYTHONUNBUFFERED=1
 Environment=MONGO_INIT_RETRIES=12
@@ -18,6 +20,9 @@ Environment=NBA_REFRESH_AUDIT_PLAYER_IDS=
 ExecStart=/usr/bin/flock -n /tmp/netric-nightly-refresh.lock __NETRIC_PYTHON_BIN__ __NETRIC_BACKEND_DIR__/nightly_refresh.py
 Restart=on-failure
 RestartSec=5m
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

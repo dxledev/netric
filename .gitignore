@@ -11,3 +11,4 @@ backend/nohup.out
 linux-mint-machine
 linux-mint-machine.pub
 uvicorn.log
+uvicorn.pid

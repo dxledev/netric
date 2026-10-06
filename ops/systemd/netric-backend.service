@@ -1,15 +1,23 @@
 [Unit]
 Description=Netric FastAPI backend
-After=network-online.target
+After=network-online.target mongod.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/ec2-user/netric/backend
+User=__NETRIC_USER__
+Group=__NETRIC_GROUP__
+WorkingDirectory=__NETRIC_BACKEND_DIR__
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/ec2-user/netric/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
-Restart=on-failure
+Environment=MONGO_INIT_RETRIES=12
+Environment=MONGO_INIT_RETRY_DELAY_SECONDS=10
+Environment=MONGO_SERVER_SELECTION_TIMEOUT_MS=15000
+ExecStart=__NETRIC_PYTHON_BIN__ -m uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
 RestartSec=5s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

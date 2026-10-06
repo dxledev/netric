@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly BACKEND_UNIT="netric-backend.service"
+readonly NGINX_UNIT="nginx.service"
+readonly MONGO_UNIT="mongod.service"
+readonly REFRESH_SERVICE="netric-nightly-refresh.service"
+readonly REFRESH_TIMER="netric-nightly-refresh.timer"
+readonly HEALTH_SERVICE="netric-healthcheck.service"
+readonly HEALTH_TIMER="netric-healthcheck.timer"
+
+usage() {
+    cat <<'EOF'
+Usage: netricctl COMMAND
+
+Commands:
+  on, start      Enable at boot and start the full Netric stack
+  off, stop      Stop Netric and prevent it from starting at boot
+  toggle         Turn the stack off when running, or on when stopped
+  restart        Restart the frontend proxy and backend
+  status         Show service state and local HTTP health
+  logs           Follow backend, Nginx, and health-monitor logs
+EOF
+}
+
+require_root() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        exec sudo -- "$0" "$@"
+    fi
+}
+
+stack_on() {
+    systemctl enable --now "${MONGO_UNIT}"
+    systemctl enable --now "${BACKEND_UNIT}"
+    systemctl enable --now "${NGINX_UNIT}"
+    systemctl enable --now "${REFRESH_TIMER}"
+    systemctl enable --now "${HEALTH_TIMER}"
+    systemctl start "${HEALTH_SERVICE}"
+    printf 'Netric is ON and enabled at boot.\n'
+}
+
+stack_off() {
+    systemctl disable --now "${HEALTH_TIMER}"
+    systemctl stop "${HEALTH_SERVICE}" 2>/dev/null || true
+    systemctl disable --now "${REFRESH_TIMER}"
+    systemctl stop "${REFRESH_SERVICE}" 2>/dev/null || true
+    systemctl disable --now "${BACKEND_UNIT}"
+    systemctl disable --now "${NGINX_UNIT}"
+    printf 'Netric is OFF and disabled at boot. MongoDB was left running to protect shared/local data users.\n'
+}
+
+unit_state() {
+    local unit_name="$1"
+    local active_state
+    local enabled_state
+
+    active_state="$(systemctl is-active "${unit_name}" 2>/dev/null || true)"
+    enabled_state="$(systemctl is-enabled "${unit_name}" 2>/dev/null || true)"
+    printf '%-36s active=%-10s enabled=%s\n' "${unit_name}" "${active_state:-unknown}" "${enabled_state:-unknown}"
+}
+
+show_status() {
+    local frontend_health="unhealthy"
+    local backend_health="unhealthy"
+
+    unit_state "${MONGO_UNIT}"
+    unit_state "${BACKEND_UNIT}"
+    unit_state "${NGINX_UNIT}"
+    unit_state "${REFRESH_TIMER}"
+    unit_state "${HEALTH_TIMER}"
+
+    if curl --fail --silent --max-time 5 http://127.0.0.1/ >/dev/null; then
+        frontend_health="healthy"
+    fi
+    if curl --fail --silent --max-time 5 http://127.0.0.1:8000/openapi.json >/dev/null; then
+        backend_health="healthy"
+    fi
+
+    printf '\nFrontend through Nginx: %s\n' "${frontend_health}"
+    printf 'FastAPI backend:        %s\n' "${backend_health}"
+}
+
+command_name="${1:-status}"
+
+case "${command_name}" in
+    on|start)
+        require_root "$@"
+        stack_on
+        show_status
+        ;;
+    off|stop)
+        require_root "$@"
+        stack_off
+        show_status
+        ;;
+    toggle)
+        require_root "$@"
+        if systemctl is-active --quiet "${BACKEND_UNIT}" && systemctl is-active --quiet "${NGINX_UNIT}"; then
+            stack_off
+        else
+            stack_on
+        fi
+        show_status
+        ;;
+    restart)
+        require_root "$@"
+        systemctl restart "${BACKEND_UNIT}" "${NGINX_UNIT}"
+        systemctl start "${HEALTH_SERVICE}"
+        show_status
+        ;;
+    status)
+        show_status
+        ;;
+    logs)
+        require_root "$@"
+        exec journalctl --follow --lines=100 \
+            -u "${BACKEND_UNIT}" -u "${NGINX_UNIT}" -u "${HEALTH_SERVICE}"
+        ;;
+    help|--help|-h)
+        usage
+        ;;
+    *)
+        printf 'Unknown command: %s\n\n' "${command_name}" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check Netric and recover unhealthy services
+After=network-online.target mongod.service netric-backend.service nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/netric-healthcheck __NETRIC_DOMAIN__
+
