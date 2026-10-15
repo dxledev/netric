@@ -429,8 +429,6 @@ export default function PlayerInfo() {
   if (!data || !data.season_stats)
     return (
       <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.22),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.18),_transparent_28%)]" />
-
         <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
           <div className="w-full max-w-3xl rounded-[2rem] border border-white/10 bg-white/5 p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl animate-fade-up">
             <div className="mx-auto mb-6 h-16 w-16 rounded-full border-4 border-blue-400/30 border-t-blue-400 animate-spin" />
@@ -1688,10 +1686,10 @@ export default function PlayerInfo() {
   }
 
   const primaryStats = [
-    { label: "PTS", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.pts), accent: "from-blue-500/30 to-cyan-400/10" },
-    { label: "AST", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.ast), accent: "from-emerald-500/30 to-teal-400/10" },
-    { label: "REB", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.reb), accent: "from-amber-500/30 to-orange-400/10" },
-    { label: "TS%", value: formatPct(activeSeasonStats?.ts_pct), accent: "from-fuchsia-500/30 to-pink-400/10" },
+    { label: "PTS", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.pts), accent: "bg-blue-500/20" },
+    { label: "AST", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.ast), accent: "bg-emerald-500/20" },
+    { label: "REB", value: formatPerGameStat(activeSeasonStats, activeSeasonStats?.reb), accent: "bg-amber-500/20" },
+    { label: "TS%", value: formatPct(activeSeasonStats?.ts_pct), accent: "bg-fuchsia-500/20" },
   ]
 
   const seasonSections = [
@@ -1804,10 +1802,6 @@ export default function PlayerInfo() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_26%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
-      <div className="absolute left-[-6rem] top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl animate-float-slow" />
-      <div className="absolute bottom-10 right-[-5rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-float-delayed" />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-6 flex justify-end">
           <ReturnHome className="border border-white/10 bg-white/10 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15" />
@@ -1819,7 +1813,6 @@ export default function PlayerInfo() {
               <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
                   <div className="relative">
-                    <div className="absolute inset-0 rounded-[1.75rem] bg-gradient-to-br from-blue-400/25 via-cyan-300/15 to-emerald-300/10 blur-xl" />
                     <img
                       src={playerHeadshotUrl}
                       alt={playerName}
@@ -1880,7 +1873,7 @@ export default function PlayerInfo() {
                   {primaryStats.map(stat => (
                     <div
                       key={stat.label}
-                      className={`group rounded-2xl border border-white/10 bg-gradient-to-br ${stat.accent} p-4 shadow-lg shadow-black/15 transition-all duration-300 hover:-translate-y-1 hover:border-white/20`}
+                      className={`group rounded-2xl border border-white/10 ${stat.accent} p-4 shadow-lg shadow-black/15 transition-all duration-300 hover:-translate-y-1 hover:border-white/20`}
                     >
                       <p className="text-xs uppercase tracking-[0.22em] text-slate-300">{stat.label}</p>
                       <p className="mt-3 text-2xl font-semibold text-white transition-transform duration-300 group-hover:translate-x-1">
@@ -1901,7 +1894,7 @@ export default function PlayerInfo() {
                       onClick={() => setTab(option.id)}
                       className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-300 ${
                         isActive
-                          ? "bg-white text-slate-950 shadow-lg shadow-white/10"
+                          ? "bg-orange-400 text-slate-950 shadow-lg shadow-orange-400/20"
                           : "text-slate-300 hover:bg-white/10 hover:text-white"
                       }`}
                     >
@@ -2041,7 +2034,7 @@ export default function PlayerInfo() {
                                   key={`${game.game_id || game.game_date || game.matchup}-preview`}
                                   type="button"
                                   onClick={() => openGameSummary(game, index)}
-                                  className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/6 to-white/0 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1 hover:border-blue-300/25 hover:bg-white/10"
+                                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1 hover:border-blue-300/25 hover:bg-white/10"
                                 >
                                   <div className="flex items-start justify-between gap-4">
                                     <div>
@@ -2391,7 +2384,7 @@ export default function PlayerInfo() {
                               }}
                               className={`rounded-2xl border px-4 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 cursor-pointer ${
                                 isCareerHighMatch
-                                  ? "border-blue-300/35 bg-gradient-to-br from-blue-500/20 to-cyan-400/10 shadow-lg shadow-blue-900/20"
+                                  ? "border-blue-300/35 bg-blue-500/20 shadow-lg shadow-blue-900/20"
                                   : "border-white/10 bg-white/5 hover:border-white/20"
                               }`}
                             >
@@ -2471,7 +2464,7 @@ export default function PlayerInfo() {
 
                       <form onSubmit={handleCommentSubmit} className="mt-5">
                         <div className="mb-3 flex items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-sm font-semibold text-white">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-blue-500/20 text-sm font-semibold text-white">
                             {currentProfileImage ? (
                               <img
                                 src={currentProfileImage}
@@ -2501,7 +2494,7 @@ export default function PlayerInfo() {
                           <button
                             type="submit"
                             disabled={commentSubmitting || !commentDraft.trim()}
-                            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-white"
+                            className="rounded-xl bg-orange-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-orange-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-orange-300"
                           >
                             {commentSubmitting ? "Posting" : "Post Comment"}
                           </button>
@@ -2529,7 +2522,7 @@ export default function PlayerInfo() {
                               className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
                             >
                               <div className="flex items-start gap-3">
-                                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-sm font-semibold text-white">
+                                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-blue-500/20 text-sm font-semibold text-white">
                                   {comment.profile_image ? (
                                     <img
                                       src={comment.profile_image}
@@ -2617,7 +2610,7 @@ export default function PlayerInfo() {
                                           <button
                                             type="submit"
                                             disabled={submittingReplyId === comment.id || !String(replyDrafts[comment.id] || "").trim()}
-                                            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-950 transition-all duration-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
+                                            className="rounded-lg bg-orange-400 px-3 py-1.5 text-xs font-semibold text-slate-950 transition-all duration-300 hover:bg-orange-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-orange-300"
                                           >
                                           {submittingReplyId === comment.id ? "Posting" : "Post"}
                                           </button>
@@ -2631,7 +2624,7 @@ export default function PlayerInfo() {
                                       {comment.replies.map(reply => (
                                         <div key={reply.id || `${reply.username}-${reply.created_at}`} className="rounded-xl bg-slate-950/35 p-3">
                                           <div className="flex items-start gap-3">
-                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-xs font-semibold text-white">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-blue-500/20 text-xs font-semibold text-white">
                                               {reply.profile_image ? (
                                                 <img
                                                   src={reply.profile_image}

@@ -815,10 +815,6 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_24%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
-      <div className="absolute left-[-6rem] top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl animate-float-slow" />
-      <div className="absolute bottom-10 right-[-5rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-float-delayed" />
-
       <div className="relative mx-auto max-w-[1760px]">
         <div className="mx-auto flex min-h-[calc(100vh-5rem)] items-center justify-center">
           <div className="w-full max-w-[1760px] rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl animate-fade-up sm:p-8 lg:p-10">
@@ -840,7 +836,7 @@ export default function Home() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={() => navigate("/search")}
-                    className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-100"
+                    className="rounded-xl bg-orange-400 px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-orange-400/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-orange-300"
                   >
                     Search
                   </button>
@@ -869,15 +865,15 @@ export default function Home() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-cyan-400/10 p-4 shadow-lg shadow-black/15">
+                <div className="rounded-2xl border border-white/10 bg-blue-500/20 p-4 shadow-lg shadow-black/15">
                   <p className="text-xs uppercase tracking-[0.24em] text-blue-100">Players</p>
                   <p className="mt-3 text-3xl font-semibold text-white">{favorites.players.length}</p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/20 to-teal-400/10 p-4 shadow-lg shadow-black/15">
+                <div className="rounded-2xl border border-white/10 bg-emerald-500/20 p-4 shadow-lg shadow-black/15">
                   <p className="text-xs uppercase tracking-[0.24em] text-emerald-100">Teams</p>
                   <p className="mt-3 text-3xl font-semibold text-white">{favorites.teams.length}</p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-amber-500/20 to-orange-400/10 p-4 shadow-lg shadow-black/15">
+                <div className="rounded-2xl border border-white/10 bg-amber-500/20 p-4 shadow-lg shadow-black/15">
                   <p className="text-xs uppercase tracking-[0.24em] text-amber-100">Stats</p>
                   <p className="mt-3 text-3xl font-semibold text-white">{favorites.stats.length}</p>
                 </div>
@@ -894,7 +890,7 @@ export default function Home() {
                         onClick={() => setActiveTab(tab.id)}
                         className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-300 ${
                           isActive
-                            ? "bg-white text-slate-950 shadow-lg shadow-white/10"
+                            ? "bg-orange-400 text-slate-950 shadow-lg shadow-orange-400/20"
                             : "text-slate-300 hover:bg-white/10 hover:text-white"
                         }`}
                       >
@@ -998,7 +994,7 @@ export default function Home() {
                                 </button>
                                 <button
                                   onClick={applyPlayerFilter}
-                                  className="ml-auto rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-950 transition-colors duration-200 hover:bg-slate-100"
+                                  className="ml-auto rounded-lg bg-orange-400 px-3 py-1.5 text-xs font-medium text-slate-950 transition-colors duration-200 hover:bg-orange-300"
                                 >
                                   Apply
                                 </button>

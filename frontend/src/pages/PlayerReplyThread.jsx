@@ -117,7 +117,7 @@ function CommentCard({ comment }) {
   return (
     <article className="rounded-2xl border border-white/10 bg-white/[0.05] p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 text-sm font-semibold text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-blue-500/20 text-sm font-semibold text-white">
           {comment.profile_image ? (
             <img
               src={comment.profile_image}
@@ -208,7 +208,7 @@ function ReplyCard({
       style={{ marginLeft: depth > 0 ? `${Math.min(depth * 28, 168)}px` : undefined }}
     >
       <div className="flex items-start gap-3">
-        <div className={`flex ${avatarSize} shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-blue-500/25 to-emerald-400/20 font-semibold text-white`}>
+        <div className={`flex ${avatarSize} shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-blue-500/20 font-semibold text-white`}>
           {reply.profile_image ? (
             <img
               src={reply.profile_image}
@@ -645,7 +645,7 @@ export default function PlayerReplyThread() {
                     <button
                       type="submit"
                       disabled={submitting || !replyDraft.trim()}
-                      className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-slate-950 transition-all duration-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
+                      className="rounded-lg bg-orange-400 px-4 py-1.5 text-xs font-semibold text-slate-950 transition-all duration-300 hover:bg-orange-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-orange-300"
                     >
                       {submitting ? "Posting" : "Post"}
                     </button>

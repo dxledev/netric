@@ -395,7 +395,6 @@ export default function PlayerSummaryCard({
         isDragged ? "scale-[0.985] opacity-70" : ""
       } ${isDragTarget ? "border-blue-300/40 shadow-xl shadow-blue-500/10" : ""}`}
     >
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
 
       {showFavoriteActions && contextMenu && (
         <div
@@ -470,7 +469,7 @@ export default function PlayerSummaryCard({
 
                 navigate(`/player/${player.id}?${gameLogParams.toString()}`)
               }}
-              className="mt-4 w-full max-w-[13.5rem] rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-emerald-400/10 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-300/25 hover:from-blue-500/15 hover:to-emerald-400/15"
+              className="mt-4 w-full max-w-[13.5rem] rounded-2xl border border-white/10 bg-blue-500/10 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-300/25 hover:bg-blue-500/15"
             >
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-100">
                 {lastGameDisplay.isPostseason ? "Last Game - PS" : "Last Game"}

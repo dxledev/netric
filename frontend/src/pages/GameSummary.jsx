@@ -14,7 +14,7 @@ import {
 function StatCard({ label, value, accent = "" }) {
   return (
     <div
-      className={`rounded-2xl border border-white/10 bg-gradient-to-br ${accent} p-4 shadow-lg shadow-black/15`}
+      className={`rounded-2xl border border-white/10 ${accent} p-4 shadow-lg shadow-black/15`}
     >
       <p className="text-xs uppercase tracking-[0.22em] text-slate-300">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
@@ -138,11 +138,11 @@ export default function GameSummary() {
 
   const primaryStats = game
     ? [
-        { label: "PTS", value: formatGameLogNumber(game.pts, 0, "0"), accent: "from-blue-500/30 to-cyan-400/10" },
-        { label: "REB", value: formatGameLogNumber(game.reb, 0, "0"), accent: "from-amber-500/30 to-orange-400/10" },
-        { label: "AST", value: formatGameLogNumber(game.ast, 0, "0"), accent: "from-emerald-500/30 to-teal-400/10" },
-        { label: "STL", value: formatGameLogNumber(game.stl, 0, "0"), accent: "from-fuchsia-500/30 to-pink-400/10" },
-        { label: "BLK", value: formatGameLogNumber(game.blk, 0, "0"), accent: "from-violet-500/30 to-indigo-400/10" },
+        { label: "PTS", value: formatGameLogNumber(game.pts, 0, "0"), accent: "bg-blue-500/20" },
+        { label: "REB", value: formatGameLogNumber(game.reb, 0, "0"), accent: "bg-amber-500/20" },
+        { label: "AST", value: formatGameLogNumber(game.ast, 0, "0"), accent: "bg-emerald-500/20" },
+        { label: "STL", value: formatGameLogNumber(game.stl, 0, "0"), accent: "bg-fuchsia-500/20" },
+        { label: "BLK", value: formatGameLogNumber(game.blk, 0, "0"), accent: "bg-violet-500/20" },
       ]
     : []
 
@@ -191,8 +191,6 @@ export default function GameSummary() {
   if (!data || loading) {
     return (
       <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.22),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.18),_transparent_28%)]" />
-
         <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
           <div className="w-full max-w-3xl rounded-[2rem] border border-white/10 bg-white/5 p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl animate-fade-up">
             <div className="mx-auto mb-6 h-16 w-16 rounded-full border-4 border-blue-400/30 border-t-blue-400 animate-spin" />
@@ -207,8 +205,6 @@ export default function GameSummary() {
   if (!game) {
     return (
       <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_26%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
-
         <div className="relative mx-auto max-w-5xl">
           <div className="mb-6 flex justify-between gap-3">
             <button
@@ -231,10 +227,6 @@ export default function GameSummary() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_26%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
-      <div className="absolute left-[-6rem] top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl animate-float-slow" />
-      <div className="absolute bottom-10 right-[-5rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-float-delayed" />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-6 flex justify-between gap-3">
           <button
@@ -303,7 +295,7 @@ export default function GameSummary() {
               </div>
 
               <div className="grid gap-5">
-                <div className="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-blue-500/12 via-slate-900/75 to-emerald-400/10 p-5 shadow-lg shadow-black/20">
+                <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/75 p-5 shadow-lg shadow-black/20">
                   <p className="text-xs uppercase tracking-[0.3em] text-blue-200">Quick Read</p>
                   <h2 className="mt-3 text-2xl font-semibold text-white">
                     {formatGameLogNumber(game.pts, 0, "0")} / {formatGameLogNumber(game.reb, 0, "0")} / {formatGameLogNumber(game.ast, 0, "0")}

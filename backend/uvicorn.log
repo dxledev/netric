@@ -1,0 +1,97 @@
+MongoDB (stats) connection attempt 1/1 failed: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 3.0s, Topology Description: <TopologyDescription id: 6ad14fc89a44792e7886a140, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>
+Traceback (most recent call last):
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/bin/uvicorn", line 7, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/main.py", line 433, in main
+    run(
+    ~~~^
+        app,
+        ^^^^
+    ...<47 lines>...
+        h11_max_incomplete_event_size=h11_max_incomplete_event_size,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/main.py", line 606, in run
+    server.run()
+    ~~~~~~~~~~^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/server.py", line 75, in run
+    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+  File "/usr/lib/python3.14/asyncio/runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/asyncio/runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 720, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/server.py", line 79, in serve
+    await self._serve(sockets)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/server.py", line 86, in _serve
+    config.load()
+    ~~~~~~~~~~~^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/config.py", line 441, in load
+    self.loaded_app = import_from_string(self.app)
+                      ~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.14/importlib/__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1406, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/main.py", line 10, in <module>
+    from auth import (
+    ...<21 lines>...
+    )
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/auth.py", line 7, in <module>
+    from database import player_cache_collection, player_comments_collection, users_collection
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/database.py", line 71, in <module>
+    stats_client = _connect_with_retry(stats_uri, "stats")
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/database.py", line 62, in _connect_with_retry
+    raise last_error
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/database.py", line 50, in _connect_with_retry
+    client.admin.command("ping")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/pymongo/database.py", line 751, in command
+    with self.__client._socket_for_reads(
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+            read_preference, session) as (sock_info, secondary_ok):
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/pymongo/mongo_client.py", line 1387, in _socket_for_reads
+    server = self._select_server(read_preference, session)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/pymongo/mongo_client.py", line 1346, in _select_server
+    server = topology.select_server(server_selector)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/pymongo/topology.py", line 244, in select_server
+    return random.choice(self.select_servers(selector,
+                         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+                                             server_selection_timeout,
+                                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+                                             address))
+                                             ^^^^^^^^
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/pymongo/topology.py", line 202, in select_servers
+    server_descriptions = self._select_servers_loop(
+        selector, server_timeout, address)
+  File "/home/dxle/dev/coding-in-class/spring2026/4800CS/netric/backend/venv/lib/python3.14/site-packages/pymongo/topology.py", line 218, in _select_servers_loop
+    raise ServerSelectionTimeoutError(
+        "%s, Timeout: %ss, Topology Description: %r" %
+        (self._error_message(selector), timeout, self.description))
+pymongo.errors.ServerSelectionTimeoutError: 127.0.0.1:27018: [Errno 111] Connection refused, Timeout: 3.0s, Topology Description: <TopologyDescription id: 6ad14fc89a44792e7886a140, topology_type: Single, servers: [<ServerDescription ('127.0.0.1', 27018) server_type: Unknown, rtt: None, error=AutoReconnect('127.0.0.1:27018: [Errno 111] Connection refused')>]>

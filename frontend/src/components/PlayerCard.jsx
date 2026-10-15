@@ -205,7 +205,7 @@ export default function PlayerCard({
     >
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex flex-col items-start gap-4 lg:w-64">
-          <div className="rounded-[1.5rem] bg-gradient-to-br from-blue-400/20 to-emerald-400/15 p-2">
+          <div className="rounded-[1.5rem] bg-blue-400/20 p-2">
             <img
               src={headshot_url}
               alt={name}
@@ -308,7 +308,7 @@ export default function PlayerCard({
           </div>
 
           {last_game && (
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-emerald-400/10 px-5 py-4">
+            <div className="rounded-2xl border border-white/10 bg-blue-500/10 px-5 py-4">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-100">Last Game</p>
               <h3 className="mt-2 text-lg font-semibold text-white">{last_game.matchup}</h3>
               <p className="mt-1 text-xs text-slate-300">{last_game.date}</p>
