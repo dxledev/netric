@@ -144,6 +144,8 @@ export default function GameSummary() {
         { label: "AST", value: formatGameLogNumber(game.ast, 0, "0"), accent: "bg-emerald-500/20" },
         { label: "STL", value: formatGameLogNumber(game.stl, 0, "0"), accent: "bg-fuchsia-500/20" },
         { label: "BLK", value: formatGameLogNumber(game.blk, 0, "0"), accent: "bg-violet-500/20" },
+        { label: "TOV", value: formatGameLogNumber(game.tov, 0, "0"), accent: "bg-red-500/20" },
+        { label: "PF", value: formatGameLogNumber(game.pf, 0, "0"), accent: "bg-orange-500/20" },
       ]
     : []
 
@@ -156,8 +158,6 @@ export default function GameSummary() {
             { label: "MIN", value: game.min || "-" },
             { label: "Result", value: game.result || "-" },
             { label: "+/-", value: formatSignedGameLogNumber(game.plus_minus) },
-            { label: "TOV", value: formatGameLogNumber(game.tov, 0, "0") },
-            { label: "PF", value: formatGameLogNumber(game.pf, 0, "0") },
           ],
         },
         {
@@ -260,7 +260,7 @@ export default function GameSummary() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7 [&>:last-child]:col-span-2 sm:[&>:last-child]:col-span-1">
                 {primaryStats.map(stat => (
                   <StatCard key={stat.label} label={stat.label} value={stat.value} accent={stat.accent} />
                 ))}
@@ -275,7 +275,7 @@ export default function GameSummary() {
                     <p className="mt-1 text-sm text-slate-400">{detailSections[0].description}</p>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
                     {detailSections[0].stats.map(stat => (
                       <DetailStat key={`snapshot-${stat.label}`} label={stat.label} value={stat.value} />
                     ))}
