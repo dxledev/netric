@@ -330,7 +330,6 @@ export default function TeamFavoriteCard({
         isDragged ? "scale-[0.985] opacity-70" : ""
       } ${isDragTarget ? "border-emerald-300/40 shadow-xl shadow-emerald-500/10" : ""}`}
     >
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
 
       {contextMenu && (
         <div

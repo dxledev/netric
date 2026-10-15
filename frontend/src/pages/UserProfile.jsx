@@ -594,9 +594,9 @@ export default function UserProfile() {
 
   const totalFavorites = favorites.players.length + favorites.teams.length + favorites.stats.length
   const favoriteSections = [
-    { label: "Players", value: favorites.players.length, color: "from-blue-500/20 to-cyan-400/10", text: "text-blue-100" },
-    { label: "Teams", value: favorites.teams.length, color: "from-emerald-500/20 to-teal-400/10", text: "text-emerald-100" },
-    { label: "Stats", value: favorites.stats.length, color: "from-amber-500/20 to-orange-400/10", text: "text-amber-100" },
+    { label: "Players", value: favorites.players.length, color: "bg-blue-500/20", text: "text-blue-100" },
+    { label: "Teams", value: favorites.teams.length, color: "bg-emerald-500/20", text: "text-emerald-100" },
+    { label: "Stats", value: favorites.stats.length, color: "bg-amber-500/20", text: "text-amber-100" },
   ]
   const favoritePlayers = favorites.players.slice(0, 5)
   const favoriteTeams = favorites.teams.slice(0, 5)
@@ -785,10 +785,6 @@ export default function UserProfile() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_24%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
-      <div className="absolute left-[-6rem] top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl animate-float-slow" />
-      <div className="absolute bottom-10 right-[-5rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-float-delayed" />
-
       <div className="relative mx-auto max-w-7xl">
         <div className="mb-6">
           <ReturnHome className="border border-white/10 bg-white/10 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15" />
@@ -999,7 +995,7 @@ export default function UserProfile() {
                 <div className="flex flex-col gap-3 sm:flex-row lg:shrink-0">
                   <button
                     onClick={handleSaveProfile}
-                    className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-100"
+                    className="rounded-xl bg-orange-400 px-5 py-3 text-sm font-medium text-slate-950 shadow-lg shadow-orange-400/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-orange-300"
                   >
                     Save
                   </button>
@@ -1028,7 +1024,7 @@ export default function UserProfile() {
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {favoriteSections.map(section => (
-              <div key={section.label} className={`rounded-2xl border border-white/10 bg-gradient-to-br ${section.color} p-4 shadow-lg shadow-black/15`}>
+              <div key={section.label} className={`rounded-2xl border border-white/10 ${section.color} p-4 shadow-lg shadow-black/15`}>
                 <p className={`text-xs uppercase tracking-[0.24em] ${section.text}`}>{section.label}</p>
                 <p className="mt-3 text-3xl font-semibold text-white">{loading ? "..." : section.value}</p>
               </div>
@@ -1199,7 +1195,7 @@ export default function UserProfile() {
                     className={`rounded-xl px-5 py-3 text-sm font-medium transition-all duration-300 ${
                       passwordLoading
                         ? "cursor-not-allowed bg-white/10 text-slate-400"
-                        : "bg-white text-slate-950 shadow-lg shadow-white/10 hover:-translate-y-0.5 hover:bg-slate-100"
+                        : "bg-orange-400 text-slate-950 shadow-lg shadow-orange-400/20 hover:-translate-y-0.5 hover:bg-orange-300"
                     }`}
                   >
                     {passwordLoading ? "Updating..." : "Update Password"}

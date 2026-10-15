@@ -225,10 +225,6 @@ export default function PlayerSearch() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_24%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]" />
-      <div className="absolute left-[-6rem] top-16 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl animate-float-slow" />
-      <div className="absolute bottom-8 right-[-4rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-float-delayed" />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-6 flex justify-end">
           <ReturnHome className="border border-white/10 bg-white/10 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15" />
@@ -288,7 +284,7 @@ export default function PlayerSearch() {
                     />
 
                     {category === "players" && (loadingMatches || matches.length > 0) && (
-                      <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-blue-300/20 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur">
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-blue-300/20 bg-slate-950shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur">
                         {loadingMatches && (
                           <div className="px-4 py-3 text-xs text-slate-300">Finding matches...</div>
                         )}
@@ -319,7 +315,7 @@ export default function PlayerSearch() {
                     )}
 
                     {category === "teams" && (loadingTeams || teamMatches.length > 0) && (
-                      <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-emerald-300/20 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur">
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-emerald-300/20 bg-slate-950shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur">
                         {loadingTeams && (
                           <div className="px-4 py-3 text-xs text-slate-300">Loading teams...</div>
                         )}
@@ -356,7 +352,7 @@ export default function PlayerSearch() {
                     className={`rounded-xl px-5 py-3 text-sm font-medium transition-all duration-300 ${
                       loading
                         ? "cursor-not-allowed bg-white/10 text-slate-400"
-                        : "bg-white text-slate-950 shadow-lg shadow-white/10 hover:-translate-y-0.5 hover:bg-slate-100"
+                        : "bg-orange-400 text-slate-950 shadow-lg shadow-orange-400/20 hover:-translate-y-0.5 hover:bg-orange-300"
                     }`}
                   >
                     {loading ? "Searching..." : "Search"}

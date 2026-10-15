@@ -88,7 +88,7 @@ export default function Standings() {
                   key={tab}
                   onClick={() => setConference(tab)}
                   className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-300 ${
-                    conference === tab ? "bg-white text-slate-950" : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                    conference === tab ? "bg-orange-400 text-slate-950" : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
                   }`}
                 >
                   {tab === "east" ? "Eastern" : "Western"}
@@ -168,7 +168,7 @@ export default function Standings() {
                     key={item.name}
                     onClick={() => setRound(item.name)}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-300 ${
-                      activeRound.name === item.name ? "bg-white text-slate-950" : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                      activeRound.name === item.name ? "bg-orange-400 text-slate-950" : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
                     }`}
                   >
                     {item.name}
