@@ -2,6 +2,8 @@
 // Netric = net + metric, so the page pairs a half-court shot chart (the net)
 // with a box-score line (the metric). Everything is flat color, no gradients.
 
+import Court from "./Court"
+
 const MADE = [
   [250, 78, 0], [232, 96, 90], [276, 104, 180], [214, 138, 270], [290, 150, 360],
   [250, 168, 450], [196, 214, 540], [324, 204, 630], [60, 70, 720], [440, 66, 810],
@@ -10,6 +12,11 @@ const MADE = [
 
 const MISSED = [
   [134, 176, 140], [372, 188, 320], [420, 214, 500], [86, 238, 680], [312, 282, 860],
+]
+
+const SHOTS = [
+  ...MADE.map(([x, y, delay]) => ({ x, y, made: true, delay: delay + 200 })),
+  ...MISSED.map(([x, y, delay]) => ({ x, y, made: false, delay: delay + 200 })),
 ]
 
 function Wordmark() {
@@ -50,47 +57,7 @@ function ShotChart() {
         </span>
       </figcaption>
 
-      <svg
-        viewBox="-10 -10 520 330"
-        className="block w-full"
-        role="img"
-        aria-label="Half-court diagram with sample made and missed shots"
-      >
-        <g fill="none" stroke="var(--color-slate-600)" strokeWidth="3" strokeLinecap="round">
-          <rect x="0" y="0" width="500" height="310" rx="2" strokeDasharray="0" />
-          <rect x="170" y="0" width="160" height="190" />
-          <path d="M190 190 A60 60 0 0 1 310 190" />
-          <path d="M190 190 A60 60 0 0 0 310 190" strokeDasharray="7 9" />
-          <path d="M210 52.5 A40 40 0 0 0 290 52.5" />
-          <path d="M30 0 V142 A237.5 237.5 0 0 0 470 142 V0" />
-          <path d="M220 40 H280" strokeWidth="5" stroke="var(--color-slate-400)" />
-        </g>
-        <circle cx="250" cy="52.5" r="9" fill="none" stroke="var(--color-orange-400)" strokeWidth="4" />
-
-        {MADE.map(([x, y, delay]) => (
-          <circle
-            key={`m${x}-${y}`}
-            className="shot"
-            style={{ animationDelay: `${delay + 200}ms` }}
-            cx={x}
-            cy={y}
-            r="9"
-            fill="var(--color-blue-400)"
-            fillOpacity="0.9"
-          />
-        ))}
-        {MISSED.map(([x, y, delay]) => (
-          <path
-            key={`x${x}-${y}`}
-            className="shot"
-            style={{ animationDelay: `${delay + 200}ms` }}
-            d={`M${x - 7} ${y - 7} L${x + 7} ${y + 7} M${x + 7} ${y - 7} L${x - 7} ${y + 7}`}
-            stroke="var(--color-red-400)"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-        ))}
-
+      <Court shots={SHOTS} label="Half-court diagram with sample made and missed shots">
         <path
           className="shot-arc"
           pathLength="1"
@@ -101,7 +68,7 @@ function ShotChart() {
           strokeLinecap="round"
         />
         <circle cx="92" cy="296" r="11" fill="var(--color-orange-400)" />
-      </svg>
+      </Court>
 
       <div className="grid grid-cols-4 border-t border-white/10 text-center tabular-nums">
         {[

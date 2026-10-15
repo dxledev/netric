@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import axios from "axios"
 
 import { API_BASE } from "../api"
+import GameShotChart from "../components/GameShotChart"
 import { readPlayerSummaryCache, writePlayerSummaryCache } from "../utils/playerSummaryCache"
 import {
   findGameLogByKey,
@@ -14,7 +15,7 @@ import {
 function StatCard({ label, value, accent = "" }) {
   return (
     <div
-      className={`rounded-2xl border border-white/10 ${accent} p-4 shadow-lg shadow-black/15`}
+      className={`rounded-2xl border border-white/10 ${accent} p-4 text-center shadow-lg shadow-black/15`}
     >
       <p className="text-xs uppercase tracking-[0.22em] text-slate-300">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
@@ -160,9 +161,13 @@ export default function GameSummary() {
           ],
         },
         {
-          title: "Shooting Volume",
-          description: "Every made and attempted shot category.",
+          title: "Efficiency",
+          description: "Scoring efficiency and shot volume from the stored game log.",
           stats: [
+            { label: "eFG%", value: `${formatGameLogPct(game.efg_pct)}%` },
+            { label: "TS%", value: `${formatGameLogPct(game.ts_pct)}%` },
+          ],
+          volume: [
             { label: "FGM", value: formatGameLogNumber(game.fgm, 0, "0") },
             { label: "FGA", value: formatGameLogNumber(game.fga, 0, "0") },
             { label: "FG%", value: `${formatGameLogPct(game.fg_pct)}%` },
@@ -172,17 +177,6 @@ export default function GameSummary() {
             { label: "FTM", value: formatGameLogNumber(game.ftm, 0, "0") },
             { label: "FTA", value: formatGameLogNumber(game.fta, 0, "0") },
             { label: "FT%", value: `${formatGameLogPct(game.ft_pct)}%` },
-          ],
-        },
-        {
-          title: "Efficiency",
-          description: "Possession-adjusted scoring efficiency derived from the stored game log.",
-          stats: [
-            { label: "eFG%", value: `${formatGameLogPct(game.efg_pct)}%` },
-            { label: "TS%", value: `${formatGameLogPct(game.ts_pct)}%` },
-            { label: "Date", value: game.date || "-" },
-            { label: "Season", value: resolvedSeason || "-" },
-            { label: "Matchup", value: game.matchup || "-" },
           ],
         },
       ]
@@ -274,27 +268,24 @@ export default function GameSummary() {
             </div>
 
             <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="grid gap-5">
-                {detailSections.slice(0, 2).map(section => (
-                  <div
-                    key={section.title}
-                    className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15"
-                  >
-                    <div className="mb-5">
-                      <h2 className="text-lg font-semibold text-white">{section.title}</h2>
-                      <p className="mt-1 text-sm text-slate-400">{section.description}</p>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {section.stats.map(stat => (
-                        <DetailStat key={`${section.title}-${stat.label}`} label={stat.label} value={stat.value} />
-                      ))}
-                    </div>
+              <div className="grid content-start gap-5">
+                <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20">
+                  <div className="mb-5">
+                    <h2 className="text-lg font-semibold text-white">{detailSections[0].title}</h2>
+                    <p className="mt-1 text-sm text-slate-400">{detailSections[0].description}</p>
                   </div>
-                ))}
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {detailSections[0].stats.map(stat => (
+                      <DetailStat key={`snapshot-${stat.label}`} label={stat.label} value={stat.value} />
+                    ))}
+                  </div>
+                </div>
+
+                <GameShotChart game={game} />
               </div>
 
-              <div className="grid gap-5">
+              <div className="grid content-start gap-5">
                 <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/75 p-5 shadow-lg shadow-black/20">
                   <p className="text-xs uppercase tracking-[0.3em] text-blue-200">Quick Read</p>
                   <h2 className="mt-3 text-2xl font-semibold text-white">
@@ -305,16 +296,23 @@ export default function GameSummary() {
                   </p>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/15">
+                <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20">
                   <div className="mb-5">
-                    <h2 className="text-lg font-semibold text-white">{detailSections[2].title}</h2>
-                    <p className="mt-1 text-sm text-slate-400">{detailSections[2].description}</p>
+                    <h2 className="text-lg font-semibold text-white">{detailSections[1].title}</h2>
+                    <p className="mt-1 text-sm text-slate-400">{detailSections[1].description}</p>
                   </div>
 
                   <div className="grid gap-3">
-                    {detailSections[2].stats.map(stat => (
-                      <DetailStat key={`efficiency-${stat.label}`} label={stat.label} value={stat.value} />
-                    ))}
+                    <div className="grid grid-cols-2 gap-3">
+                      {detailSections[1].stats.map(stat => (
+                        <DetailStat key={`efficiency-${stat.label}`} label={stat.label} value={stat.value} />
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {detailSections[1].volume.map(stat => (
+                        <DetailStat key={`volume-${stat.label}`} label={stat.label} value={stat.value} />
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
