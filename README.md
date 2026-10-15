@@ -4,6 +4,20 @@ Netric Sports is an NBA stats web app for searching players and teams, tracking 
 
 Live site: [netricsports.us](https://netricsports.us)
 
+## Rebuild and reload
+
+After the initial [local deployment setup](ops/README.md), run from the repository root:
+
+```bash
+./rebuild.sh
+```
+
+This builds the frontend, checks backend Python syntax, publishes the frontend to
+`/var/www/netric`, restarts `netric-backend.service`, reloads Nginx, and checks the
+frontend and API. Run as your normal user; it asks for sudo after the build passes.
+Existing Nginx configuration is preserved. For a different domain, use
+`./rebuild.sh example.com`.
+
 ### Favorites Dashboard
 
 - View saved players, teams, and stat categories in one dashboard.
