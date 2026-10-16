@@ -2,7 +2,8 @@ import os
 import time
 from datetime import UTC, datetime
 
-from nba_api.stats.endpoints import playercareerstats, playergamelog
+from nba_api.stats.endpoints import commonplayerinfo, playercareerstats, playergamelog
+from nba_api.stats.endpoints import shotchartdetail
 from nba_api.stats.static import players
 
 from database import player_cache_collection
@@ -15,6 +16,10 @@ NBA_API_RETRY_DELAY_SECONDS = float(os.getenv("NBA_API_RETRY_DELAY_SECONDS", "2"
 FETCH_REPAIR_MAX_SEASONS_PER_JOB = int(
     os.getenv("FETCH_REPAIR_MAX_SEASONS_PER_JOB", "8")
 )
+
+
+class ShotChartPayloadError(ValueError):
+    """The NBA endpoint returned a malformed ShotChartDetail dataset."""
 
 
 def utc_now():
@@ -90,6 +95,67 @@ def fetch_game_logs_by_season(
     return season_logs
 
 
+def fetch_shot_chart_by_season(
+    player_id: int,
+    season_id: str,
+    season_type_all_star: str = "Regular Season",
+    month: int = 0,
+    game_id: str | None = None,
+):
+    """Return the endpoint's named Shot_Chart_Detail rows as raw dictionaries."""
+    params = {
+        "team_id": 0,
+        "player_id": player_id,
+        "season_nullable": season_id,
+        "season_type_all_star": season_type_all_star,
+        "context_measure_simple": "FGA",
+        "timeout": NBA_API_TIMEOUT_SECONDS,
+    }
+    if month:
+        params["month"] = int(month)
+    if game_id:
+        params["game_id_nullable"] = str(game_id)
+    def fetch_response():
+        response = shotchartdetail.ShotChartDetail(**params, get_request=False)
+        try:
+            response.get_request()
+        except (KeyError, ValueError) as exc:
+            raw_response = getattr(response, "nba_response", None)
+            status = getattr(raw_response, "_status_code", None)
+            if isinstance(status, int) and status >= 400:
+                raise ShotChartPayloadError(
+                    f"NBA ShotChartDetail returned HTTP {status}"
+                ) from exc
+            raise ShotChartPayloadError(
+                f"ShotChartDetail response could not be parsed ({type(exc).__name__})"
+            ) from exc
+        return response
+
+    response = run_with_retries(fetch_response)
+    dataset = getattr(response, "shot_chart_detail", None)
+    if dataset is None or not hasattr(dataset, "get_dict"):
+        raise ShotChartPayloadError("ShotChartDetail response is missing the named shot_chart_detail dataset")
+    detail = dataset.get_dict()
+    if not isinstance(detail, dict):
+        raise ShotChartPayloadError("ShotChartDetail dataset is malformed")
+    headers = detail.get("headers")
+    rows = detail.get("data")
+    if not isinstance(headers, list) or not headers or not isinstance(rows, list):
+        raise ShotChartPayloadError("ShotChartDetail dataset has malformed headers or data")
+    required_headers = {
+        "PLAYER_ID", "GAME_ID", "GAME_EVENT_ID", "LOC_X", "LOC_Y",
+        "SHOT_MADE_FLAG", "SHOT_ATTEMPTED_FLAG",
+    }
+    if not required_headers.issubset(headers):
+        raise ShotChartPayloadError(
+            "ShotChartDetail dataset is missing required columns: "
+            + ", ".join(sorted(required_headers.difference(headers)))
+        )
+    if any(not isinstance(row, (list, tuple)) or len(row) != len(headers) for row in rows):
+        raise ShotChartPayloadError("ShotChartDetail result contains malformed rows")
+    return [dict(zip(headers, row)) for row in rows]
+
+
 def fetch_missing_game_logs_by_season(player_id: int, missing_log_season_ids: dict):
     season_type_by_field = {
         "season_game_logs": "Regular Season",
@@ -131,10 +197,46 @@ def fetch_missing_game_logs_by_season(player_id: int, missing_log_season_ids: di
 
 def get_player_name(player_id: int):
     player_info = players.find_player_by_id(player_id)
-    if not player_info:
-        raise Exception("Player not found")
+    if player_info:
+        return player_info["full_name"]
 
-    return player_info["full_name"]
+    # Live rosters can include rookies absent from nba_api's packaged list.
+    response = run_with_retries(
+        lambda: commonplayerinfo.CommonPlayerInfo(
+            player_id=player_id,
+            timeout=NBA_API_TIMEOUT_SECONDS,
+        )
+    )
+    rows = response.get_data_frames()[0].to_dict("records")
+    if rows and int(rows[0].get("PERSON_ID") or 0) == int(player_id):
+        name = str(rows[0].get("DISPLAY_FIRST_LAST") or "").strip()
+        if name:
+            return name
+    raise ValueError("Player not found in the live NBA roster")
+
+
+def merge_player_info_data(cached_data, player_info):
+    """Merge a live CommonAllPlayers row without replacing historical stats."""
+    merged = dict(cached_data or {})
+    if not isinstance(player_info, dict):
+        return merged
+    merged["player_info"] = dict(player_info)
+    abbreviation = str(player_info.get("TEAM_ABBREVIATION") or "").strip()
+    try:
+        team_id = int(player_info.get("TEAM_ID"))
+    except (TypeError, ValueError):
+        team_id = None
+    if team_id is not None:
+        city = str(player_info.get("TEAM_CITY") or "").strip()
+        name = str(player_info.get("TEAM_NAME") or "").strip()
+        if city and name and not name.lower().startswith(city.lower()):
+            name = f"{city} {name}"
+        merged["current_team"] = {
+            "id": team_id,
+            "name": name or city,
+            "abbreviation": abbreviation,
+        }
+    return merged
 
 
 def get_latest_remote_game_date_for_type(player_id: int, season_type_all_star: str):
@@ -263,6 +365,12 @@ def merge_cached_player_data(existing_data, fetched_data):
             existing_data.get(field),
             fetched_data.get(field),
         )
+
+    profile_rows = merged_data.get("common_player_info") or []
+    if profile_rows and isinstance(profile_rows[0], dict):
+        current_name = str(profile_rows[0].get("DISPLAY_FIRST_LAST") or "").strip()
+        if current_name:
+            merged_data["name"] = current_name
 
     return merged_data
 

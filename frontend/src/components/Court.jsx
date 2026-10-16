@@ -2,13 +2,14 @@
 // `shots` is a list of { x, y, made, delay } in court units (50ft x 47ft, 10 units per ft,
 // baseline at y=0, hoop at 250,52.5). `children` render above the dots.
 
-export default function Court({ shots = [], dotRadius = 9, label, children }) {
+export default function Court({ shots = [], dotRadius = 9, label, children, courtHeight = 310, viewHeight = courtHeight }) {
   const cross = dotRadius * 0.78
+  const svgHeight = Math.max(courtHeight, viewHeight) + 20
 
   return (
-    <svg viewBox="-10 -10 520 330" className="block w-full" role="img" aria-label={label}>
+    <svg viewBox={`-10 -10 520 ${svgHeight}`} className="block w-full" role="img" aria-label={label}>
       <g fill="none" stroke="var(--color-slate-600)" strokeWidth="3" strokeLinecap="round">
-        <rect x="0" y="0" width="500" height="310" rx="2" />
+        <rect x="0" y="0" width="500" height={courtHeight} rx="2" />
         <rect x="170" y="0" width="160" height="190" />
         <path d="M190 190 A60 60 0 0 1 310 190" />
         <path d="M190 190 A60 60 0 0 0 310 190" strokeDasharray="7 9" />
@@ -18,10 +19,10 @@ export default function Court({ shots = [], dotRadius = 9, label, children }) {
       </g>
       <circle cx="250" cy="52.5" r="9" fill="none" stroke="var(--color-orange-400)" strokeWidth="4" />
 
-      {shots.map(({ x, y, made, delay }) =>
+      {shots.map(({ x, y, made, delay, key }) =>
         made ? (
           <circle
-            key={`m${x}-${y}`}
+            key={key ?? `m${x}-${y}`}
             className="shot"
             style={{ animationDelay: `${delay}ms` }}
             cx={x}
@@ -32,7 +33,7 @@ export default function Court({ shots = [], dotRadius = 9, label, children }) {
           />
         ) : (
           <path
-            key={`x${x}-${y}`}
+            key={key ?? `x${x}-${y}`}
             className="shot"
             style={{ animationDelay: `${delay}ms` }}
             d={`M${x - cross} ${y - cross} L${x + cross} ${y + cross} M${x + cross} ${y - cross} L${x - cross} ${y + cross}`}

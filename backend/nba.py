@@ -4,22 +4,103 @@ import unicodedata
 
 import pandas as pd
 from fastapi import HTTPException
-from nba_api.stats.static import players
+from nba_api.stats.static import players, teams
 
 from database import fetch_queue_collection, player_cache_collection
 from player_team_overrides import get_player_team_override
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
-SUMMARY_VERSION = 16
+SUMMARY_VERSION = 18
 ACTIVE_PLAYER_MATCHES_ONLY = True
 
 SUMMARY_REQUIRED_FIELDS = (
+    "season_teams",
     "playoff_season_game_logs",
     "available_playoff_game_log_seasons",
     "playin_season_game_logs",
     "available_playin_game_log_seasons",
 )
+
+HISTORICAL_TEAM_NAMES_BY_ABBREVIATION = {
+    "ATL": "Atlanta Hawks",
+    "BAL": "Baltimore Bullets",
+    "BUF": "Buffalo Braves",
+    "CAP": "Capital Bullets",
+    "CHH": "Charlotte Hornets",
+    "KCK": "Kansas City Kings",
+    "NJN": "New Jersey Nets",
+    "NOH": "New Orleans Hornets",
+    "NOK": "New Orleans/Oklahoma City Hornets",
+    "SEA": "Seattle SuperSonics",
+    "VAN": "Vancouver Grizzlies",
+    "WSB": "Washington Bullets",
+}
+
+
+def get_team_details(team_id, abbreviation="", name=""):
+    team_id = to_int(team_id, default=0)
+    abbreviation = "" if pd.isna(abbreviation) else str(abbreviation or "").strip().upper()
+    name = "" if pd.isna(name) else str(name or "").strip()
+    static_team = next(
+        (team for team in teams.get_teams() if to_int(team.get("id"), default=0) == team_id and team_id > 0),
+        None,
+    )
+
+    if not abbreviation and static_team:
+        abbreviation = str(static_team.get("abbreviation") or "").strip().upper()
+    if not name:
+        name = HISTORICAL_TEAM_NAMES_BY_ABBREVIATION.get(abbreviation, "")
+    if not name and static_team:
+        name = str(static_team.get("full_name") or "").strip()
+
+    return {"id": team_id, "name": name, "abbreviation": abbreviation}
+
+
+def build_season_teams(career_stats: pd.DataFrame, season_game_logs: dict):
+    rows_by_season = {}
+
+    for _, row in career_stats.iterrows():
+        season_id = str(row.get("SEASON_ID") or "").strip()
+        abbreviation = str(row.get("TEAM_ABBREVIATION") or "").strip().upper()
+        team_id = to_int(row.get("TEAM_ID"), default=0)
+        if not season_id or team_id <= 0 or abbreviation == "TOT":
+            continue
+        rows_by_season.setdefault(season_id, []).append(row)
+
+    season_teams = {}
+    for season_id, rows in rows_by_season.items():
+        usable_rows = [
+            row for row in rows
+            if str(row.get("TEAM_ABBREVIATION") or "").strip().upper() != "TOT"
+        ]
+        if not usable_rows:
+            continue
+
+        selected_row = usable_rows[-1]
+        for game in season_game_logs.get(season_id, []):
+            matchup = str(game.get("matchup") or "").strip().upper()
+            game_abbreviation = matchup[:3]
+            matching_row = next(
+                (
+                    row for row in usable_rows
+                    if str(row.get("TEAM_ABBREVIATION") or "").strip().upper() == game_abbreviation
+                ),
+                None,
+            )
+            if matching_row is not None:
+                selected_row = matching_row
+                break
+
+        details = get_team_details(
+            selected_row.get("TEAM_ID"),
+            selected_row.get("TEAM_ABBREVIATION"),
+            selected_row.get("TEAM_NAME"),
+        )
+        if details["id"]:
+            season_teams[season_id] = details
+
+    return season_teams
 
 
 def to_int(value, default=0):
@@ -485,11 +566,23 @@ def build_player_summary_from_data(player_id: int, data: dict):
     latest = career_stats.iloc[0]
     latest_season_id = str(latest["SEASON_ID"])
     season_game_logs = build_season_game_logs(career_stats, data)
+    season_teams = build_season_teams(career_stats, season_game_logs)
     normalized_games = season_game_logs.get(latest_season_id, [])
     team_name = str(latest.get("TEAM_NAME") or "").strip()
     team_abbreviation = str(latest.get("TEAM_ABBREVIATION") or "").strip()
     team_id = to_int(latest.get("TEAM_ID"), default=0)
-    team = get_player_team_override(player_id) or {
+    current_team = data.get("current_team")
+    if not current_team:
+        player_info = data.get("player_info")
+        if isinstance(player_info, list):
+            player_info = player_info[0] if player_info else None
+        if isinstance(player_info, dict) and player_info.get("TEAM_ABBREVIATION"):
+            current_team = {
+                "id": to_int(player_info.get("TEAM_ID")),
+                "name": str(player_info.get("TEAM_NAME") or "").strip(),
+                "abbreviation": str(player_info.get("TEAM_ABBREVIATION") or "").strip(),
+            }
+    team = current_team or get_player_team_override(player_id) or {
         "id": team_id,
         "name": team_name,
         "abbreviation": team_abbreviation,
@@ -548,6 +641,7 @@ def build_player_summary_from_data(player_id: int, data: dict):
         "name": data["name"],
         "team": team,
         "season": latest_season_id,
+        "season_teams": season_teams,
         "season_stats": season_stats,
         "season_stats_by_season": season_stats_by_season,
         "available_stat_seasons": sort_season_ids(season_stats_by_season.keys()),
@@ -598,7 +692,7 @@ def search_player_stats(name: str):
         return build_player_summary(player_id)
 
     fetch_queue.update_one(
-        {"player_id": player_id},
+        {"player_id": player_id, "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]}},
         {"$set": {"player_id": player_id, "name": name}},
         upsert=True
     )

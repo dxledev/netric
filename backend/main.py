@@ -33,6 +33,7 @@ from auth import (
 
 from database import fetch_queue_collection, player_cache_collection
 from services.team_service import build_cached_full_game_log, get_cached_standings, get_cached_team_summary, get_current_season, list_teams
+from services.game_shots import get_cached_game_shots
 
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -208,6 +209,12 @@ def standings():
 def game_summary(game_id: str, season: str = None):
     return build_cached_full_game_log(game_id, season)
 
+
+@app.get("/players/{player_id}/games/{game_id}/shots")
+@app.get("/api/players/{player_id}/games/{game_id}/shots")
+def game_shots(player_id: int, game_id: str, season: str = None):
+    return get_cached_game_shots(player_id, game_id, season)
+
 # ---------------------------
 # AUTH
 # ---------------------------
@@ -283,7 +290,7 @@ def get_player_summary(player_id: int):
 
     if not cached:
         fetch_queue.update_one(
-            {"player_id": player_id},
+            {"player_id": player_id, "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]}},
             {"$set": {"player_id": player_id}},
             upsert=True
         )
@@ -383,6 +390,11 @@ def serve_frontend(full_path: str):
     requested_path = (frontend_dist / full_path).resolve()
 
     if full_path and requested_path.is_file() and requested_path.is_relative_to(frontend_dist):
-        return FileResponse(requested_path)
+        cache_control = (
+            "public, max-age=31536000, immutable"
+            if full_path.startswith("assets/")
+            else "no-store"
+        )
+        return FileResponse(requested_path, headers={"Cache-Control": cache_control})
 
-    return FileResponse(frontend_dist / "index.html")
+    return FileResponse(frontend_dist / "index.html", headers={"Cache-Control": "no-store"})

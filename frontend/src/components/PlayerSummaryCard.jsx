@@ -117,7 +117,6 @@ export default function PlayerSummaryCard({
       setSummary(cachedSummary)
       setLoading(false)
       setNotCached(false)
-      return undefined
     }
 
     let intervalId

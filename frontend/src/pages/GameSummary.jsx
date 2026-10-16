@@ -282,7 +282,7 @@ export default function GameSummary() {
                   </div>
                 </div>
 
-                <GameShotChart game={game} />
+                <GameShotChart playerId={id} game={game} season={resolvedSeason} />
               </div>
 
               <div className="grid content-start gap-5">

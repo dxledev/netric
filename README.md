@@ -60,6 +60,7 @@ Existing Nginx configuration is preserved. For a different domain, use
 - Filter game highs by all-time or a specific season.
 - Open top-50 stat-high pages for PTS, REB, AST, STL, BLK, FGM, 3PM, FTM, TOV, MIN, or plus-minus.
 - Open detailed single-game summaries with box-score, shooting, efficiency, matchup, date, result, and quick-read sections.
+- View made and missed field goals at their recorded court locations, with an expanded court for deep attempts.
 
 ### Player Comparison
 
@@ -147,3 +148,54 @@ In this setup:
 
 - `users` and `player_comments` use the local stats DB unless `MONGO_AUTH_URI` or `MONGO_AUTH_DB` are set.
 - `player_cache` and `fetch_queue` use the stats DB.
+- `shot_chart_cache` stores verified `nba_api.stats.endpoints.ShotChartDetail` data per player, season, and season type.
+
+Nightly refreshes compare current NBA player profiles, including team and
+biographical details, and recent season totals. Team changes update independently
+of game dates; changed totals schedule a full stats refresh. Current NBA team data
+takes precedence over historical season teams and static trade overrides. New
+season stats become the default after games are recorded, while cached prior
+seasons remain available.
+
+To backfill shot locations into the local stats database using the fetch worker:
+
+```bash
+backend/venv/bin/python -u backend/backfill_shots.py --run
+```
+
+The backfill resumes missing coverage, starting with recent seasons, and keeps
+existing player stats intact. Requests are spaced three seconds apart. Failed
+jobs retain their error and retry time in `fetch_queue`. Run the command again to
+resume them. Failed shot jobs wait progressively longer between retries, from
+15 minutes up to six hours; jobs with fewer failures are processed first.
+Optional filters are `--season 2025-26` and `--player-id 201939`.
+Use `--all-players` to try one request per season and season type; failed batches
+split into individual player jobs. Regular-season batches use NBA season-month
+filters to avoid truncated responses. Seasons before 1996–97 are skipped. Add
+`--background` with `--run` to keep the backfill running in a detached process;
+its PID and timestamped log are written under `backend/logs/`.
+
+Check progress with:
+
+```bash
+backend/venv/bin/python -u backend/backfill_shots.py --status
+```
+
+`GET /players/{id}/games/{game_id}/shots` reads the stored shots. Missing coverage
+queues a game-specific worker job ahead of historical backfill work and returns
+`status: "pending"` with a queued, fetching, or retrying state. It fetches that game
+directly from `ShotChartDetail`, independently of season-job retry delays, and
+merges the verified shots into the season cache. Shot data is kept separate from
+player summaries.
+
+To reconcile all cached teams from the current NBA roster, register missing
+current-season players, and queue detailed profile checks:
+
+```bash
+backend/venv/bin/python -u backend/sync_player_info.py
+backend/venv/bin/python -u backend/sync_player_info.py --run --background
+```
+
+Check that queue with `backend/venv/bin/python -u backend/sync_player_info.py --status`.
+Player profiles show the current team by default. Explicitly selecting a season
+uses the team recorded for that season.

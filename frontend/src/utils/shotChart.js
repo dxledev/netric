@@ -1,85 +1,56 @@
-// Turns a game's shot counts into dot positions on the half-court diagram.
-// The game log stores counts (FGM/FGA, 3PM/3PA) but not court locations, so the counts
-// are exact and the positions are schematic: threes sit along the arc, twos fill the
-// space inside it.
-
 const HOOP_X = 250
 const HOOP_Y = 52.5
-const ARC_ANGLE = 1.185 // radians from straight down to where the arc meets the corner lines
-const THREE_RADIUS = 248
-const CORNER_LENGTH = 124
-const GOLDEN = 0.618034
 
-function toCount(value) {
-  const count = Math.round(Number(value))
-  return Number.isFinite(count) && count > 0 ? count : 0
+function finiteCoordinate(value) {
+  if (value === null || value === undefined || value === "") {
+    return null
+  }
+
+  const coordinate = Number(value)
+  return Number.isFinite(coordinate) ? coordinate : null
 }
 
-// Spreads `hits` made shots evenly through `total` attempts so misses are not clumped.
-function spreadMakes(total, hits) {
-  const results = []
-  let placed = 0
+function isMade(value) {
+  return value === 1 || value === "1" || value === true
+}
 
-  for (let i = 0; i < total; i += 1) {
-    const isHit = Math.round(((i + 1) * hits) / total) > placed
-    if (isHit) {
-      placed += 1
+// ShotChartDetail locations are in tenths of a foot from the basket. The chart
+// keeps the existing 500 by 470 court coordinate system and centers the hoop.
+export function buildShotChart(rawShots) {
+  const sourceShots = Array.isArray(rawShots) ? rawShots : []
+  const shots = sourceShots.flatMap((shot, index) => {
+    const locX = finiteCoordinate(shot?.LOC_X)
+    const locY = finiteCoordinate(shot?.LOC_Y)
+
+    if (locX === null || locY === null) {
+      return []
     }
-    results.push(isHit)
-  }
 
-  return results
-}
+    const rawEventId = shot?.GAME_EVENT_ID
+    const key = rawEventId === null || rawEventId === undefined || rawEventId === ""
+      ? `shot-${index}`
+      : String(rawEventId)
 
-function threePointSpot(index, total) {
-  const arcLength = THREE_RADIUS * ARC_ANGLE * 2
-  const along = ((index + 0.5) / total) * (arcLength + CORNER_LENGTH * 2)
+    return [{
+      key,
+      x: Math.round((HOOP_X + locX) * 10) / 10,
+      y: Math.round((HOOP_Y + locY) * 10) / 10,
+      made: isMade(shot?.SHOT_MADE_FLAG),
+    }]
+  })
 
-  if (along < CORNER_LENGTH) {
-    return [14, 24 + along]
-  }
-
-  if (along > CORNER_LENGTH + arcLength) {
-    return [486, 24 + (along - CORNER_LENGTH - arcLength)]
-  }
-
-  const angle = -ARC_ANGLE + (along - CORNER_LENGTH) / THREE_RADIUS
-  return [HOOP_X + THREE_RADIUS * Math.sin(angle), HOOP_Y + THREE_RADIUS * Math.cos(angle)]
-}
-
-function twoPointSpot(index, total) {
-  const radius = 24 + 180 * Math.sqrt((index + 0.5) / total)
-  const angle = (((index * GOLDEN) % 1) - 0.5) * 2.6
-  return [HOOP_X + radius * Math.sin(angle), HOOP_Y + radius * Math.cos(angle)]
-}
-
-export function buildShotChart(game) {
-  const fga = toCount(game?.fga)
-  const fgm = Math.min(toCount(game?.fgm), fga)
-  const threeAttempts = Math.min(toCount(game?.three_pa), fga)
-  const threeMade = Math.min(toCount(game?.three_pm), threeAttempts, fgm)
-  const twoAttempts = fga - threeAttempts
-  const twoMade = Math.min(Math.max(fgm - threeMade, 0), twoAttempts)
-
-  const twoResults = spreadMakes(twoAttempts, twoMade)
-  const threeResults = spreadMakes(threeAttempts, threeMade)
-
-  const shots = [
-    ...twoResults.map((made, i) => ({ made, spot: twoPointSpot(i, twoAttempts) })),
-    ...threeResults.map((made, i) => ({ made, spot: threePointSpot(i, threeAttempts) })),
-  ]
-
+  const made = shots.reduce((count, shot) => count + Number(shot.made), 0)
+  const missed = shots.length - made
+  const dotRadius = shots.length > 28 ? 7.5 : 9
   const step = Math.min(70, 1000 / Math.max(shots.length, 1))
+  const maxY = shots.reduce((height, shot) => Math.max(height, shot.y + dotRadius), 310)
 
   return {
-    made: fgm,
-    missed: fga - fgm,
-    dotRadius: fga > 28 ? 7.5 : 9,
-    shots: shots.map(({ made, spot }, i) => ({
-      x: Math.round(spot[0] * 10) / 10,
-      y: Math.round(spot[1] * 10) / 10,
-      made,
-      delay: Math.round(i * step),
-    })),
+    made,
+    missed,
+    dotRadius,
+    courtHeight: maxY > 310 ? 470 : 310,
+    viewHeight: Math.max(maxY > 310 ? 470 : 310, maxY),
+    shots: shots.map((shot, index) => ({ ...shot, delay: Math.round(index * step) })),
   }
 }

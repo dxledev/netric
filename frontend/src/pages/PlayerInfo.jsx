@@ -220,6 +220,7 @@ export default function PlayerInfo() {
   const initialTab = searchParams.get("tab")
   const [tab, setTab] = useState(["games", "career", "advanced", "comments"].includes(initialTab) ? initialTab : "season")
   const [selectedGameLogSeason, setSelectedGameLogSeason] = useState("")
+  const [hasSelectedSeason, setHasSelectedSeason] = useState(() => Boolean(searchParams.get("season")))
   const [selectedGameHighSeason, setSelectedGameHighSeason] = useState("all-time")
   const [splitMode, setSplitMode] = useState("default")
   const [gameLogDateSortDirection, setGameLogDateSortDirection] = useState("asc")
@@ -327,9 +328,10 @@ export default function PlayerInfo() {
     const nextIsPostSeason = searchParams.get("postseason") === "1"
 
     setIsPostSeason(nextIsPostSeason)
+    setHasSelectedSeason(Boolean(searchParams.get("season")))
 
     setTab(["games", "career", "advanced", "comments"].includes(nextTab) ? nextTab : "season")
-  }, [searchParams])
+  }, [id, searchParams])
 
   useEffect(() => {
     setIsFavorited(isPlayerFavorited(normalizedPlayerId))
@@ -1561,6 +1563,9 @@ export default function PlayerInfo() {
   ])
   const activeGameLogSeason = selectedGameLogSeason || seasonSelectorOptions[0] || defaultSeason
   const activeSeason = activeGameLogSeason || availableStatSeasons[0] || defaultSeason
+  const selectedSeasonTeam = hasSelectedSeason
+    ? data.season_teams?.[activeSeason] || data.team
+    : data.team
   const defaultSeasonStats = isPostSeason ? data.playoff_season_stats : data.season_stats
   const hasActiveSeasonStatsEntry = Object.prototype.hasOwnProperty.call(
     seasonStatsBySeason,
@@ -1796,8 +1801,8 @@ export default function PlayerInfo() {
 
   const activeLastGameIndex = findGameLogIndex(activeLastGame)
   const playerName = data?.name || "Player"
-  const playerTeamName = getExpandedTeamName(data?.team) || "-"
-  const playerTeamLogoUrl = getTeamLogoUrl(data?.team)
+  const playerTeamName = getExpandedTeamName(selectedSeasonTeam) || "-"
+  const playerTeamLogoUrl = getTeamLogoUrl(selectedSeasonTeam)
   const playerHeadshotUrl = data?.headshot_url || `https://cdn.nba.com/headshots/nba/latest/1040x760/${normalizedPlayerId}.png`
 
   return (
@@ -1952,7 +1957,10 @@ export default function PlayerInfo() {
                                 <span className="text-xs uppercase tracking-[0.22em] text-slate-400">Season</span>
                                 <select
                                   value={activeGameLogSeason}
-                                  onChange={event => setSelectedGameLogSeason(event.target.value)}
+                                  onChange={event => {
+                                    setSelectedGameLogSeason(event.target.value)
+                                    setHasSelectedSeason(true)
+                                  }}
                                   disabled={seasonSelectorOptions.length === 0}
                                   className="min-w-36 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-left text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
                                 >
@@ -2102,7 +2110,10 @@ export default function PlayerInfo() {
                           <span className="pl-2 text-xs uppercase tracking-[0.22em] text-slate-400">Season</span>
                           <select
                             value={activeGameLogSeason}
-                            onChange={event => setSelectedGameLogSeason(event.target.value)}
+                            onChange={event => {
+                              setSelectedGameLogSeason(event.target.value)
+                              setHasSelectedSeason(true)
+                            }}
                             disabled={seasonSelectorOptions.length === 0}
                             className="w-fit rounded-xl border border-white/10 bg-slate-950/70 pl-2 pr-1 py-2 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-blue-300/40"
                           >

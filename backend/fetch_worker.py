@@ -1,6 +1,7 @@
 import os
 import time
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from database import fetch_queue_collection, player_cache_collection
 from nba import SUMMARY_VERSION, build_player_summary_from_data
@@ -9,7 +10,10 @@ from services.fetch_service import (
     fetch_missing_game_logs_by_season,
     fetch_player_data,
     merge_cached_player_data,
+    merge_player_info_data,
 )
+from services.player_info import build_current_team, fetch_common_player_info, normalize_player_info
+from services.shot_service import process_shot_chart_job
 from nba_api.stats.static import teams
 from pymongo import ReturnDocument
 from services.team_service import (
@@ -28,6 +32,8 @@ fetch_queue = fetch_queue_collection
 MAX_PER_RUN = int(os.getenv("FETCH_WORKER_MAX_PER_RUN", "5"))
 RETRY_DELAY_SECONDS = int(os.getenv("FETCH_WORKER_RETRY_DELAY_SECONDS", "900"))
 WORKER_LOCK_SECONDS = int(os.getenv("FETCH_WORKER_LOCK_SECONDS", "1800"))
+PLAYER_INFO_REQUEST_DELAY_SECONDS = float(os.getenv("PLAYER_INFO_REQUEST_DELAY_SECONDS", "3"))
+SHOT_CHART_MAX_RETRY_DELAY_SECONDS = int(os.getenv("SHOT_CHART_MAX_RETRY_DELAY_SECONDS", "21600"))
 
 
 def utc_now():
@@ -38,7 +44,7 @@ def next_retry_at(delay_seconds=RETRY_DELAY_SECONDS):
     return utc_now() + timedelta(seconds=delay_seconds)
 
 
-def find_next_job():
+def find_next_job(job_type=None, job_filter=None):
     now = utc_now()
     ready_filter = {
         "$and": [
@@ -62,8 +68,38 @@ def find_next_job():
         "$set": {
             "locked_at": now,
             "locked_until": now + timedelta(seconds=WORKER_LOCK_SECONDS),
+            "claim_token": uuid4().hex,
         }
     }
+    if job_type is not None:
+        filtered_query = {**ready_filter, **(job_filter or {}), "job_type": job_type}
+        if job_type == "shot_chart_refresh":
+            requested_job = fetch_queue.find_one_and_update(
+                {**filtered_query, "priority": {"$gt": 0}},
+                claim_update,
+                sort=[("priority", -1), ("attempts", 1), ("queued_at", 1), ("_id", 1)],
+                return_document=ReturnDocument.AFTER,
+            )
+            if requested_job:
+                return requested_job
+        if job_type == "shot_chart_refresh" and "player_id" not in (job_filter or {}):
+            batch_job = fetch_queue.find_one_and_update(
+                {**filtered_query, "player_id": {"$exists": False}},
+                claim_update,
+                sort=[("season", -1), ("queued_at", 1), ("_id", 1)],
+                return_document=ReturnDocument.AFTER,
+            )
+            if batch_job:
+                return batch_job
+        return fetch_queue.find_one_and_update(
+            filtered_query,
+            claim_update,
+            sort=([("priority", -1), ("attempts", 1), ("queued_at", 1), ("_id", 1)]
+                  if job_type == "shot_chart_refresh"
+                  else [("queued_at", 1), ("_id", 1)]),
+            return_document=ReturnDocument.AFTER,
+        )
+
     team_job = fetch_queue.find_one_and_update(
         {
             **ready_filter,
@@ -75,6 +111,28 @@ def find_next_job():
     )
     if team_job:
         return team_job
+
+    player_job = fetch_queue.find_one_and_update(
+        {
+            **ready_filter,
+            "player_id": {"$exists": True},
+            "job_type": {"$ne": "shot_chart_refresh"},
+        },
+        claim_update,
+        sort=[("queued_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    if player_job:
+        return player_job
+
+    requested_shots = fetch_queue.find_one_and_update(
+        {**ready_filter, "job_type": "shot_chart_refresh", "priority": {"$gt": 0}},
+        claim_update,
+        sort=[("priority", -1), ("attempts", 1), ("queued_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    if requested_shots:
+        return requested_shots
 
     return fetch_queue.find_one_and_update(
         ready_filter,
@@ -139,16 +197,22 @@ def fetch_repair_data(player_id):
 
 def mark_job_failed(job, error, retry_delay_seconds=None):
     attempts = int(job.get("attempts", 0)) + 1
+    delay = retry_delay_seconds if retry_delay_seconds is not None else RETRY_DELAY_SECONDS
+    if job.get("job_type") == "shot_chart_refresh":
+        delay = min(
+            SHOT_CHART_MAX_RETRY_DELAY_SECONDS,
+            delay * (2 ** min(attempts - 1, 16)),
+        )
     fetch_queue.update_one(
-        {"_id": job["_id"]},
+        {"_id": job["_id"], "claim_token": job.get("claim_token")},
         {
             "$set": {
                 "attempts": attempts,
                 "last_error": str(error),
                 "last_attempted_at": utc_now(),
-                "next_attempt_at": next_retry_at(retry_delay_seconds or RETRY_DELAY_SECONDS),
+                "next_attempt_at": next_retry_at(delay),
             },
-            "$unset": {"locked_at": "", "locked_until": ""},
+            "$unset": {"locked_at": "", "locked_until": "", "claim_token": ""},
         },
     )
 
@@ -206,7 +270,7 @@ def process_player_job(job):
     player_id = job["player_id"]
     print("Fetching player_id:", player_id)
 
-    if job.get("repair_missing_logs"):
+    if job.get("repair_missing_logs") and not job.get("refresh_stats"):
         data, failures, has_more = fetch_repair_data(player_id)
     else:
         data = fetch_player_data(player_id)
@@ -227,18 +291,65 @@ def process_player_job(job):
     return True
 
 
-def run_queue():
+def process_player_info_job(job):
+    player_id = int(job["player_id"])
+    try:
+        details = fetch_common_player_info(player_id)
+    finally:
+        if PLAYER_INFO_REQUEST_DELAY_SECONDS > 0:
+            time.sleep(PLAYER_INFO_REQUEST_DELAY_SECONDS)
+    if not details or int(details[0].get("PERSON_ID") or 0) != player_id:
+        raise ValueError(f"Player info response is missing player {player_id}")
+    current_team = build_current_team(details[0])
+    if current_team is None:
+        raise ValueError(f"Player info response has no current team for player {player_id}")
+
+    cached = player_cache.find_one({"player_id": player_id}, {"data": 1})
+    if not cached or not isinstance(cached.get("data"), dict):
+        raise ValueError(f"Player {player_id} must be cached before updating their profile")
+    existing_data = cached["data"]
+    data = merge_player_info_data(existing_data, job.get("player_info"))
+    fresh_info = normalize_player_info(details[0])
+    if fresh_info:
+        data["player_info"] = {**(data.get("player_info") or {}), **fresh_info}
+    data["current_team"] = current_team
+    data["common_player_info"] = details
+    name = str(details[0].get("DISPLAY_FIRST_LAST") or "").strip()
+    if name:
+        data["name"] = name
+    changed = data != existing_data
+    data["info_checked_at"] = utc_now()
+    if changed:
+        store_player_data(player_id, data)
+    else:
+        player_cache.update_one(
+            {"player_id": player_id},
+            {"$set": {"data.info_checked_at": data["info_checked_at"]}},
+        )
+    print(f"Player info checked: {player_id}; changed: {changed}", flush=True)
+
+
+def run_queue(job_type=None, job_filter=None):
     print("Worker started.")
 
     processed = 0
 
     while processed < MAX_PER_RUN:
-        job = find_next_job()
+        job = find_next_job(job_type=job_type, job_filter=job_filter)
         if not job:
             break
 
         try:
-            if job.get("job_type") == "team_refresh":
+            if job.get("job_type") == "shot_chart_refresh":
+                print(
+                    "Fetching shot chart:", job.get("player_id", "all"),
+                    job["season"], job["season_type"], flush=True,
+                )
+                stored_count = process_shot_chart_job(job)
+                print(f"Stored shot chart snapshots: {stored_count}", flush=True)
+            elif job.get("job_type") == "player_info_refresh":
+                process_player_info_job(job)
+            elif job.get("job_type") == "team_refresh":
                 print("Fetching team refresh.")
                 process_team_refresh_job(job)
             elif job.get("job_type") == "team_detail_refresh":
@@ -249,7 +360,10 @@ def run_queue():
                     processed += 1
                     continue
 
-            fetch_queue.delete_one({"_id": job["_id"]})
+            fetch_queue.delete_one({
+                "_id": job["_id"], "claim_token": job.get("claim_token"),
+                "refresh_stats": job.get("refresh_stats"),
+            })
 
         except BasketballReferenceRateLimit as e:
             print("Fetch failed:", e)

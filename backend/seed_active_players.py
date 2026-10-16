@@ -35,7 +35,7 @@ def seed_active_players():
             skipped += 1
             continue
 
-        if fetch_queue.find_one({"player_id": player_id}):
+        if fetch_queue.find_one({"player_id": player_id, "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]}}):
             skipped += 1
             continue
 

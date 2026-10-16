@@ -5,7 +5,7 @@ This deployment serves the Vite build from Nginx, proxies `/api/` to FastAPI on
 refresh timer, and checks the complete stack every minute. The health monitor
 starts stopped services and restarts services whose HTTP checks fail.
 
-## Install or redeploy
+## Initial installation
 
 Run this from the repository as the normal desktop user:
 
@@ -14,8 +14,21 @@ Run this from the repository as the normal desktop user:
 ```
 
 The frontend and Python checks run before the script asks for the local sudo
-password. The installer is idempotent, so the same command can be used after a
-future `git pull` to rebuild and redeploy the site.
+password. Use this installer for the initial setup: it replaces the Nginx site
+configuration and web root.
+
+For subsequent releases, run:
+
+```bash
+./rebuild.sh netricsports.us
+```
+
+This preserves existing TLS and custom Nginx configuration, retains older hashed
+assets for open tabs, and makes HTML and the build manifest revalidate on every
+request. The frontend checks for new releases when returning to a tab and every
+minute while visible, then updates automatically when there is no unsaved text.
+Tabs opened before the update checker was installed need one initial reload to
+acquire it.
 
 ## Turn the site on and off
 

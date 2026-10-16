@@ -61,7 +61,7 @@ def inspect_player(player_id: int):
     remote_latest = get_latest_remote_game_date(player_id)
 
     queue_doc = fetch_queue.find_one(
-        {"player_id": player_id},
+        {"player_id": player_id, "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]}},
         {
             "attempts": 1,
             "next_attempt_at": 1,

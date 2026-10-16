@@ -12,3 +12,7 @@ linux-mint-machine
 linux-mint-machine.pub
 uvicorn.log
 uvicorn.pid
+backend/logs/shot-chart-backfill-*.log
+backend/logs/shot-chart-backfill.pid
+backend/logs/player-info-sync-*.log
+backend/logs/player-info-sync.pid

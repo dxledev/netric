@@ -2,9 +2,6 @@ from nba_api.stats.endpoints import commonallplayers
 from nba_api.stats.static import players
 
 
-DEFAULT_PREVIOUS_SEASON = "2024-25"
-
-
 def normalize_player_record(player_id, full_name):
     return {
         "id": int(player_id),
@@ -44,13 +41,37 @@ def get_active_players_for_season(season_id: str):
     return normalized_players
 
 
-def get_tracked_players(previous_season_id: str = DEFAULT_PREVIOUS_SEASON):
+def _previous_season_id(current_season_id):
+    try:
+        start_year = int(str(current_season_id).split("-", 1)[0]) - 1
+    except (TypeError, ValueError):
+        return None
+    return f"{start_year}-{str(start_year + 1)[-2:]}"
+
+
+def get_tracked_players(previous_season_id: str | None = None):
+    # Import locally to keep the player pool independent of team-service startup
+    # and to honor the same NBA_SEASON override used by the rest of the backend.
+    from services.team_service import get_current_season
+
+    current_season_id = get_current_season()
+    previous_season_id = previous_season_id or _previous_season_id(current_season_id)
     players_by_id = {
         player["id"]: player
         for player in get_current_active_players()
     }
 
-    for player in get_active_players_for_season(previous_season_id):
-        players_by_id.setdefault(player["id"], player)
+    # Current and prior live rosters capture rookies and recently-active players
+    # that may be absent from nba_api's packaged static player list.
+    for season_id in (current_season_id, previous_season_id):
+        if not season_id:
+            continue
+        try:
+            season_players = get_active_players_for_season(season_id)
+        except Exception as exc:
+            print(f"Player roster unavailable for {season_id}: {exc}")
+            continue
+        for player in season_players:
+            players_by_id.setdefault(player["id"], player)
 
     return list(players_by_id.values())

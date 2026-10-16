@@ -9,6 +9,7 @@ from services.fetch_service import (
     get_latest_cached_game_date,
     get_latest_remote_game_date,
 )
+from services.player_info import refresh_player_info_and_stats
 from services.player_pool import get_tracked_players
 
 player_cache = player_cache_collection
@@ -39,7 +40,9 @@ def build_team_refresh_job():
 
 
 def is_already_queued(player_id):
-    return fetch_queue.find_one({"player_id": player_id}) is not None
+    return fetch_queue.find_one(
+        {"player_id": player_id, "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]}}
+    ) is not None
 
 
 def is_team_refresh_already_queued():
@@ -119,6 +122,12 @@ def should_refresh_player(player_id):
 def refresh_all_players():
     tracked_players = get_tracked_players()
 
+    try:
+        refresh_player_info_and_stats(tracked_players)
+    except Exception as exc:
+        # A metadata endpoint outage must not prevent the normal refresh pass.
+        print(f"Player freshness check failed: {exc}")
+
     queued_count = 0
     skipped_count = 0
     failed_count = 0
@@ -132,7 +141,11 @@ def refresh_all_players():
         if is_already_queued(player_id):
             if cached_player and not has_all_cached_stat_season_logs(cached_player):
                 fetch_queue.update_one(
-                    {"player_id": player_id},
+                    {
+                        "player_id": player_id,
+                        "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]},
+                        "refresh_stats": {"$ne": True},
+                    },
                     {"$set": {"repair_missing_logs": True, "refresh": True}},
                 )
             skipped_count += 1

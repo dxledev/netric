@@ -126,6 +126,8 @@ root_install() {
         "${repo_dir}/ops/nginx/netric.conf" \
         "/etc/nginx/sites-available/netric" \
         "${domain_name}" "${repo_dir}" "${deploy_user}" "${deploy_group}" "${web_root}"
+    install -D -m 0644 "${repo_dir}/ops/nginx/netric-html-cache.conf" \
+        /etc/nginx/snippets/netric-html-cache.conf
 
     ln -sfn /etc/nginx/sites-available/netric /etc/nginx/sites-enabled/netric
     if [[ -L /etc/nginx/sites-enabled/default ]]; then
