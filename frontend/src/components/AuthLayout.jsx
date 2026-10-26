@@ -3,6 +3,7 @@
 // with a box-score line (the metric). Everything is flat color, no gradients.
 
 import Court from "./Court"
+import LegalLinks from "./LegalLinks"
 
 const MADE = [
   [250, 78, 0], [232, 96, 90], [276, 104, 180], [214, 138, 270], [290, 150, 360],
@@ -119,6 +120,8 @@ export default function AuthLayout({ title, lede, features, children }) {
             ))}
           </ul>
         </section>
+
+        <LegalLinks className="pb-28 lg:col-span-2 lg:pb-0" />
       </div>
     </div>
   )

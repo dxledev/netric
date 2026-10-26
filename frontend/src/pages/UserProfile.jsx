@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import { API_BASE } from "../api"
+import LegalLinks from "../components/LegalLinks"
 import ReturnHome from "../components/ReturnHome"
 
 const EMPTY_FAVORITES = {
@@ -1217,6 +1218,8 @@ export default function UserProfile() {
             </section>
           </div>
         </div>
+
+        <LegalLinks className="mt-6 pb-28" />
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import AuthRequest, ChangePasswordRequest, PlayerCommentReplyRequest, PlayerCommentRequest, UserProfileRequest
+from models import AuthRequest, ChangePasswordRequest, PlayerCommentReplyRequest, PlayerCommentRequest, RegisterRequest, UserProfileRequest
 from auth import (
     register_user,
     login_user,
@@ -221,7 +221,7 @@ def game_shots(player_id: int, game_id: str, season: str = None):
 
 @app.post("/register")
 @app.post("/api/register")
-def register(data: AuthRequest):
+def register(data: RegisterRequest):
     return register_user(data)
 
 @app.post("/login")

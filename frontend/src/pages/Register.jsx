@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import axios from "axios"
 import { API_BASE } from "../api"
 import AuthLayout from "../components/AuthLayout"
@@ -8,6 +8,7 @@ export default function Register() {
   const navigate = useNavigate()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -18,7 +19,7 @@ export default function Register() {
       setLoading(true)
       setError(null)
 
-      await axios.post(`${API_BASE}/register`, { email, password })
+      await axios.post(`${API_BASE}/register`, { email, password, accepted_privacy: accepted })
 
       navigate("/login")
     } catch {
@@ -70,6 +71,23 @@ export default function Register() {
             value={password}
             onChange={e => setPassword(e.target.value)}
           />
+        </div>
+
+        <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-slate-950 px-4 py-3">
+          <input
+            id="register-privacy"
+            type="checkbox"
+            required
+            checked={accepted}
+            onChange={e => setAccepted(e.target.checked)}
+            className="mt-1 h-4 w-4 shrink-0 accent-orange-400"
+          />
+          <label htmlFor="register-privacy" className="text-sm text-slate-300">
+            I have read and agree to the{" "}
+            <Link to="/privacy" target="_blank" className="font-semibold text-orange-300 underline underline-offset-4">Privacy Policy</Link>
+            {" "}and{" "}
+            <Link to="/cookies" target="_blank" className="font-semibold text-orange-300 underline underline-offset-4">Cookie Policy</Link>.
+          </label>
         </div>
 
         {error && (

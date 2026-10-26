@@ -8,6 +8,7 @@ from database import player_cache_collection, player_comments_collection, users_
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
+PRIVACY_POLICY_VERSION = "2026-10-26"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -345,6 +346,9 @@ def get_cached_player_name(player_id: int):
 
 def register_user(data):
     email = normalize_email(data.email)
+    if not data.accepted_privacy:
+        raise HTTPException(status_code=400, detail="You must accept the Privacy Policy to register.")
+
     pw_bytes = data.password.encode("utf-8")
     if len(pw_bytes) > 72:
         raise HTTPException(status_code=400, detail="Password must be 72 bytes or less.")
@@ -357,6 +361,8 @@ def register_user(data):
     users_collection.insert_one({
         "email": email,
         "password_hash": hashed_pw,
+        "privacy_accepted_at": datetime.now(timezone.utc),
+        "privacy_policy_version": PRIVACY_POLICY_VERSION,
         "favorites": {
             "players": [],
             "teams": [],

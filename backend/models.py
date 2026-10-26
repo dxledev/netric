@@ -19,6 +19,9 @@ class AuthRequest(BaseModel):
 
         return email
 
+class RegisterRequest(AuthRequest):
+    accepted_privacy: bool = False
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str

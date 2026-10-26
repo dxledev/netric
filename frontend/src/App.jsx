@@ -14,6 +14,8 @@ import Teams from "./pages/Teams"
 import TeamInfo from "./pages/TeamInfo"
 import Standings from "./pages/Standings"
 import FullGameLog from "./pages/FullGameLog"
+import { Privacy, Cookies } from "./pages/Legal"
+import CookieBanner from "./components/CookieBanner"
 import { isAuthenticated } from "./auth"
 
 function ScrollToTop() {
@@ -52,7 +54,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <CookieBanner />
       <Routes>
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/cookies" element={<Cookies />} />
+
         <Route element={<PublicOnlyRoutes />}>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

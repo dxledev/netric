@@ -1673,7 +1673,7 @@ export default function PlayerInfo() {
           }`}
         >
           {isPostSeason && (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden="true">
               <path
                 fillRule="evenodd"
                 d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8a1 1 0 0 1-1.42-.005l-4-4a1 1 0 1 1 1.415-1.414l3.293 3.293 7.294-7.294a1 1 0 0 1 1.412.006Z"
@@ -1840,6 +1840,7 @@ export default function PlayerInfo() {
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 24 24"
+                          aria-hidden="true"
                           className={`h-5 w-5 ${isFavorited ? "fill-amber-300 stroke-amber-300" : "fill-transparent stroke-amber-300"}`}
                           strokeWidth="1.9"
                         >
