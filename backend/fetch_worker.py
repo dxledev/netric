@@ -13,7 +13,7 @@ from services.fetch_service import (
     merge_player_info_data,
 )
 from services.player_info import build_current_team, fetch_common_player_info, normalize_player_info
-from services.shot_service import process_shot_chart_job
+from services.shot_service import process_shot_chart_job, queue_player_game_shots
 from nba_api.stats.static import teams
 from pymongo import ReturnDocument
 from services.team_service import (
@@ -44,7 +44,7 @@ def next_retry_at(delay_seconds=RETRY_DELAY_SECONDS):
     return utc_now() + timedelta(seconds=delay_seconds)
 
 
-def find_next_job(job_type=None, job_filter=None):
+def find_next_job(job_type=None, job_filter=None, attempted_before=None):
     now = utc_now()
     ready_filter = {
         "$and": [
@@ -64,6 +64,14 @@ def find_next_job(job_type=None, job_filter=None):
             },
         ]
     }
+    if attempted_before is not None:
+        # A retry belongs to a later refresh, even if this pass takes longer
+        # than the retry delay. Otherwise a failing queue never drains.
+        ready_filter["$and"].append({"$or": [
+            {"last_attempted_at": {"$exists": False}},
+            {"last_attempted_at": None},
+            {"last_attempted_at": {"$lt": attempted_before}},
+        ]})
     claim_update = {
         "$set": {
             "locked_at": now,
@@ -100,6 +108,29 @@ def find_next_job(job_type=None, job_filter=None):
             return_document=ReturnDocument.AFTER,
         )
 
+    current_stats_job = fetch_queue.find_one_and_update(
+        {
+            **ready_filter,
+            "player_id": {"$exists": True},
+            "refresh_stats": True,
+            "job_type": {"$nin": ["shot_chart_refresh", "player_info_refresh"]},
+        },
+        claim_update,
+        sort=[("attempts", 1), ("queued_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    if current_stats_job:
+        return current_stats_job
+
+    requested_shots = fetch_queue.find_one_and_update(
+        {**ready_filter, "job_type": "shot_chart_refresh", "priority": {"$gt": 0}},
+        claim_update,
+        sort=[("priority", -1), ("attempts", 1), ("queued_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    if requested_shots:
+        return requested_shots
+
     team_job = fetch_queue.find_one_and_update(
         {
             **ready_filter,
@@ -124,15 +155,6 @@ def find_next_job(job_type=None, job_filter=None):
     )
     if player_job:
         return player_job
-
-    requested_shots = fetch_queue.find_one_and_update(
-        {**ready_filter, "job_type": "shot_chart_refresh", "priority": {"$gt": 0}},
-        claim_update,
-        sort=[("priority", -1), ("attempts", 1), ("queued_at", 1), ("_id", 1)],
-        return_document=ReturnDocument.AFTER,
-    )
-    if requested_shots:
-        return requested_shots
 
     return fetch_queue.find_one_and_update(
         ready_filter,
@@ -279,6 +301,8 @@ def process_player_job(job):
 
     if data is not None:
         store_player_data(player_id, data)
+        shots = queue_player_game_shots(player_id, data, get_current_season())
+        print(f"Player {player_id} shot-chart queue: {shots}", flush=True)
     print("Stored:", player_id)
 
     if failures:
@@ -329,13 +353,18 @@ def process_player_info_job(job):
     print(f"Player info checked: {player_id}; changed: {changed}", flush=True)
 
 
-def run_queue(job_type=None, job_filter=None):
+def run_queue(job_type=None, job_filter=None, attempted_before=None, deadline=None):
     print("Worker started.")
 
     processed = 0
 
     while processed < MAX_PER_RUN:
-        job = find_next_job(job_type=job_type, job_filter=job_filter)
+        if deadline is not None and time.monotonic() >= deadline:
+            break
+        job = find_next_job(
+            job_type=job_type, job_filter=job_filter,
+            attempted_before=attempted_before,
+        )
         if not job:
             break
 

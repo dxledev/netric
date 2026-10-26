@@ -462,6 +462,44 @@ def queue_game_shot_job(season_id, season_type, player_id, game_id, priority=100
     return result.upserted_id is not None
 
 
+def queue_player_game_shots(player_id, data, season_id):
+    """Ensure every recorded appearance has verified shots or a queued job."""
+    counts = {"games_checked": 0, "queued": 0, "already_queued": 0, "already_cached": 0, "failed": 0}
+    for season_type, field in SCOPE_FIELDS.items():
+        games = (data.get(field) or {}).get(str(season_id), [])
+        seen = set()
+        for game in games:
+            game_id = normalize_game_id(game.get("Game_ID") or game.get("GAME_ID") or game.get("game_id"))
+            if game_id in seen:
+                continue
+            seen.add(game_id)
+            counts["games_checked"] += 1
+            try:
+                if not game_id or not game_id.isdigit() or len(game_id) != 10:
+                    raise ValueError("Missing or invalid game ID")
+                if queue_game_shot_job(season_id, season_type, player_id, game_id, priority=50):
+                    counts["queued"] += 1
+                elif fetch_queue_collection.find_one({"_id": game_queue_id(season_id, season_type, player_id, game_id)}):
+                    counts["already_queued"] += 1
+                else:
+                    counts["already_cached"] += 1
+            except Exception as exc:
+                counts["failed"] += 1
+                print(f"Shot-chart scheduling failed for {player_id} {game_id}: {exc}", flush=True)
+    return counts
+
+
+def queue_current_season_shots(season_id):
+    counts = {"games_checked": 0, "queued": 0, "already_queued": 0, "already_cached": 0, "failed": 0}
+    projection = {"player_id": 1, **{f"data.{field}.{season_id}": 1 for field in SCOPE_FIELDS.values()}}
+    for player in player_cache_collection.find({}, projection):
+        result = queue_player_game_shots(player["player_id"], player.get("data") or {}, season_id)
+        for field in counts:
+            counts[field] += result[field]
+    print(f"Current-season shot-chart queue: {counts}", flush=True)
+    return counts
+
+
 def _process_game_shot_job(job):
     season_id = str(job["season"])
     season_type = job["season_type"]

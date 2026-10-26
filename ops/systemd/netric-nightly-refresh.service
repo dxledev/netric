@@ -6,6 +6,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+TimeoutStartSec=45min
 User=__NETRIC_USER__
 Group=__NETRIC_GROUP__
 WorkingDirectory=__NETRIC_BACKEND_DIR__

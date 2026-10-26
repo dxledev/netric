@@ -11,6 +11,7 @@ from services.fetch_service import (
 )
 from services.player_info import refresh_player_info_and_stats
 from services.player_pool import get_tracked_players
+from services.player_reconciliation import reconcile_current_season_players
 
 player_cache = player_cache_collection
 fetch_queue = fetch_queue_collection
@@ -122,8 +123,22 @@ def should_refresh_player(player_id):
 def refresh_all_players():
     tracked_players = get_tracked_players()
 
+    reconciliation = None
+    reconciled_regular_season = False
     try:
-        refresh_player_info_and_stats(tracked_players)
+        reconciliation = reconcile_current_season_players(tracked_players, refresh_bulk=True)
+        reconciled_regular_season = "Regular Season" not in reconciliation["failed_sources"]
+    except Exception as exc:
+        print(f"Current-season game reconciliation failed: {exc}")
+
+    # Queue new-game shot coverage before optional metadata and historical
+    # checks, which can take minutes when an NBA endpoint is unavailable.
+    from services.shot_service import queue_current_season_shots
+    from services.team_service import get_current_season
+    shots = queue_current_season_shots(get_current_season())
+
+    try:
+        refresh_player_info_and_stats(tracked_players, recent_only=True)
     except Exception as exc:
         # A metadata endpoint outage must not prevent the normal refresh pass.
         print(f"Player freshness check failed: {exc}")
@@ -152,7 +167,16 @@ def refresh_all_players():
             continue
 
         try:
-            if not should_refresh_player(player_id):
+            # The league-wide game-ID comparison and totals checks already
+            # detect current games and corrections. Avoid three slow requests
+            # per player when the bulk game source succeeded.
+            complete_logs = (
+                has_complete_cached_season_logs(cached_player)
+                and has_all_cached_stat_season_logs(cached_player)
+            )
+            if (reconciled_regular_season and complete_logs) or (
+                not reconciled_regular_season and not should_refresh_player(player_id)
+            ):
                 skipped_count += 1
                 continue
         except Exception as exc:
@@ -182,6 +206,13 @@ def refresh_all_players():
         f"Skipped {skipped_count}. Failed checks {failed_count}. "
         f"Forced queued after failed checks {forced_queue_count}."
     )
+    return {
+        "tracked_players": len(tracked_players),
+        "shot_charts_scheduled": shots,
+        "reconciliation": reconciliation if reconciled_regular_season else None,
+        "player_jobs_queued": queued_count, "skipped": skipped_count,
+        "failed_checks": failed_count,
+    }
 
 
 if __name__ == "__main__":

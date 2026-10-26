@@ -127,7 +127,7 @@ def fetch_player_info_snapshot():
     return result
 
 
-def fetch_season_stats_snapshot(season, season_type):
+def fetch_season_totals_snapshot(season, season_type):
     response = run_with_retries(
         lambda: leaguedashplayerstats.LeagueDashPlayerStats(
             league_id_nullable="00",
@@ -143,8 +143,15 @@ def fetch_season_stats_snapshot(season, season_type):
         player_id = row.get("PLAYER_ID")
         if player_id is None:
             continue
-        result[int(player_id)] = {field: _value(row.get(field)) for field in STAT_FIELDS}
+        result[int(player_id)] = {key: _value(value) for key, value in row.items()}
     return result
+
+
+def fetch_season_stats_snapshot(season, season_type):
+    return {
+        player_id: {field: row.get(field) for field in STAT_FIELDS}
+        for player_id, row in fetch_season_totals_snapshot(season, season_type).items()
+    }
 
 
 def stats_match_cached(cached_player, remote_stats, season, field="career_stats"):
@@ -214,7 +221,7 @@ def enqueue_player_info_refresh(player_id, name, info):
     return True
 
 
-def refresh_player_info_and_stats(tracked_players=None):
+def refresh_player_info_and_stats(tracked_players=None, recent_only=False):
     """Queue live metadata changes and current-season stat corrections in bulk."""
     tracked_players = tracked_players if tracked_players is not None else get_tracked_players()
     try:
@@ -238,7 +245,7 @@ def refresh_player_info_and_stats(tracked_players=None):
                     for row in (cached.get("data", {}).get(field) or [])
                     if _has_games(row) and row.get("SEASON_ID")
                 ]
-                if season_ids:
+                if season_ids and not recent_only:
                     stats_seasons.add(max(season_ids, key=_season_year))
     stats_snapshot = {}
     for stat_season in stats_seasons:

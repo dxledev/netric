@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_DIR="$REPO_ROOT/backend"
+PYTHON_BIN="$BACKEND_DIR/venv/bin/python"
+TIMER="netric-nightly-refresh.timer"
+SERVICE="netric-nightly-refresh.service"
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "Missing backend Python environment: $PYTHON_BIN" >&2
+  exit 1
+fi
+
+UNIT_DIR="$(mktemp -d /tmp/netric-refresh-fix.XXXXXX)"
+python3 - "$REPO_ROOT" "$UNIT_DIR" <<'PY'
+import grp
+import pwd
+import sys
+from pathlib import Path
+
+repo, output = map(Path, sys.argv[1:])
+owner = (repo / 'backend').stat()
+replacements = {
+    '__NETRIC_USER__': pwd.getpwuid(owner.st_uid).pw_name,
+    '__NETRIC_GROUP__': grp.getgrgid(owner.st_gid).gr_name,
+    '__NETRIC_BACKEND_DIR__': str(repo / 'backend'),
+    '__NETRIC_PYTHON_BIN__': str(repo / 'backend/venv/bin/python'),
+}
+service = (repo / 'ops/systemd/netric-nightly-refresh.service').read_text()
+for key, value in replacements.items():
+    service = service.replace(key, value)
+(output / 'netric-nightly-refresh.service').write_text(service)
+(output / 'netric-nightly-refresh.timer').write_text(
+    (repo / 'ops/systemd/netric-nightly-refresh.timer').read_text()
+)
+PY
+
+systemd-analyze verify "$UNIT_DIR/$SERVICE" "$UNIT_DIR/$TIMER"
+sudo -v
+sudo cp -a "/etc/systemd/system/$SERVICE" "$UNIT_DIR/previous.service"
+sudo cp -a "/etc/systemd/system/$TIMER" "$UNIT_DIR/previous.timer"
+
+echo "Stopping the stuck refresh and installing the timer fix..."
+sudo systemctl stop "$TIMER" "$SERVICE"
+resume_timer() {
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now "$TIMER"
+}
+trap resume_timer EXIT
+sudo install -m 644 "$UNIT_DIR/$SERVICE" "/etc/systemd/system/$SERVICE"
+sudo install -m 644 "$UNIT_DIR/$TIMER" "/etc/systemd/system/$TIMER"
+resume_timer
+trap - EXIT
+sudo systemctl start --no-block "$SERVICE"
+
+echo "Refresh started: all active players, current-season games, and missing shot charts."
+echo "Runs daily at 08:00 and 30 minutes after each completed refresh."
+echo "Previous units saved in $UNIT_DIR"
+echo "Follow the player and shot-chart counts, including the final JSON result:"
+echo "  journalctl -fu $SERVICE"
+systemctl show "$SERVICE" -p ActiveState -p TimeoutStartUSec

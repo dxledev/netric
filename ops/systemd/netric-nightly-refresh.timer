@@ -4,7 +4,7 @@ Description=Run Netric NBA cache refresh checks
 [Timer]
 OnCalendar=*-*-* 08:00:00
 OnBootSec=5m
-OnUnitActiveSec=30m
+OnUnitInactiveSec=30m
 Persistent=true
 Unit=netric-nightly-refresh.service
 

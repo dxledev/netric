@@ -69,12 +69,177 @@ player_info = importlib.import_module("services.player_info")
 fetch_service = importlib.import_module("services.fetch_service")
 refresh_db = importlib.import_module("refresh_db")
 player_pool = importlib.import_module("services.player_pool")
+reconciliation = importlib.import_module("services.player_reconciliation")
 
 
 class PlayerFreshnessTests(unittest.TestCase):
     def setUp(self):
         _db_stub.player_cache_collection.docs.clear()
         _db_stub.fetch_queue_collection.docs.clear()
+
+    def test_nightly_queues_shots_before_metadata_checks(self):
+        order = []
+        shots = {"queued": 3}
+        shot_module = types.SimpleNamespace(queue_current_season_shots=lambda season: order.append("shots") or shots)
+        with patch.dict(sys.modules, {"services.shot_service": shot_module}), \
+             patch.object(refresh_db, "get_tracked_players", return_value=[{"id": 42, "full_name": "Player"}]), \
+             patch.object(refresh_db, "reconcile_current_season_players", side_effect=lambda *args, **kwargs: order.append("reconcile") or {"failed_sources": []}), \
+             patch.object(refresh_db, "refresh_player_info_and_stats", side_effect=lambda *args, **kwargs: order.append("metadata")) as metadata, \
+             patch.object(refresh_db, "find_cached_player", return_value={"data": {}}), \
+             patch.object(refresh_db, "is_already_queued", return_value=False), \
+             patch.object(refresh_db, "has_complete_cached_season_logs", return_value=True), \
+             patch.object(refresh_db, "has_all_cached_stat_season_logs", return_value=True), \
+             patch.object(refresh_db, "should_refresh_player") as individual:
+            result = refresh_db.refresh_all_players()
+        self.assertEqual(order, ["reconcile", "shots", "metadata"])
+        self.assertEqual(result["shot_charts_scheduled"], shots)
+        self.assertTrue(metadata.call_args.kwargs["recent_only"])
+        individual.assert_not_called()
+
+    def test_recent_checks_do_not_probe_inactive_players_old_seasons(self):
+        _db_stub.player_cache_collection.docs.append({"player_id": 42, "data": {
+            "career_stats": [{"SEASON_ID": "2021-22", "GP": 1}],
+        }})
+        with patch.object(player_info, "get_current_season", return_value="2026-27"), \
+             patch.object(player_info, "fetch_player_info_snapshot", return_value={}), \
+             patch.object(player_info, "fetch_season_stats_snapshot", return_value={}) as fetch:
+            player_info.refresh_player_info_and_stats([{"id": 42, "full_name": "Player"}], recent_only=True)
+        self.assertEqual({call.args[0] for call in fetch.call_args_list}, {"2026-27", "2025-26"})
+
+    def test_bulk_refresh_repairs_games_and_totals_preserving_history_and_profile(self):
+        _db_stub.player_cache_collection.docs.append({"player_id": 42, "data": {
+            "name": "Player", "current_team": {"id": 10},
+            "career_stats": [{"SEASON_ID": "2025-26", "GP": 80},
+                             {"SEASON_ID": "2026-27", "GP": 1}],
+            "season_game_logs": {"2025-26": [{"Game_ID": "history"}],
+                                 "2026-27": [{"Game_ID": "first"}]},
+            "playoff_game_log": [{"Game_ID": "playoff"}],
+        }})
+        games = [{"PLAYER_ID": 42, "PLAYER_NAME": "Player", "TEAM_ID": 10,
+                  "GAME_ID": gid, "GAME_DATE": day, "PTS": pts}
+                 for gid, day, pts in (("first", "2026-10-20", 12),
+                                      ("second", "2026-10-22", 52))]
+        totals = {42: {"PLAYER_ID": 42, "TEAM_ID": 10, "GP": 2, "PTS": 64}}
+        with patch("nba.build_player_summary_from_data", return_value={"season": "2026-27"}):
+            result = reconciliation.refresh_current_season_from_bulk(games, "2026-27", totals)
+            again = reconciliation.refresh_current_season_from_bulk(games, "2026-27", totals)
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(again["unchanged"], 1)
+        saved = _db_stub.player_cache_collection.docs[0]
+        self.assertEqual(saved["data"]["game_log"][0]["PTS"], 52)
+        self.assertEqual(saved["data"]["career_stats"][-1]["GP"], 2)
+        self.assertEqual(saved["data"]["season_game_logs"]["2025-26"], [{"Game_ID": "history"}])
+        self.assertEqual(saved["data"]["playoff_game_log"], [{"Game_ID": "playoff"}])
+        self.assertEqual(saved["data"]["current_team"], {"id": 10})
+        self.assertEqual(saved["summary"], {"season": "2026-27"})
+
+    def test_bulk_refresh_defers_incomplete_inconsistent_and_multi_team_snapshots(self):
+        for totals, extra_game, cached_games in (
+            ({"GP": 2, "PTS": 12, "TEAM_ID": 10}, None, []),
+            ({"GP": 1, "PTS": 52, "TEAM_ID": 10}, None, []),
+            ({"GP": 2, "PTS": 24, "TEAM_ID": 10}, {"TEAM_ID": 11, "GAME_ID": "other"}, []),
+            ({"GP": 1, "PTS": 12, "TEAM_ID": 10}, None, [{"Game_ID": "newer"}]),
+        ):
+            with self.subTest(totals=totals, extra_game=extra_game, cached_games=cached_games):
+                self.setUp()
+                original = {"player_id": 42, "data": {"season_game_logs": {"2026-27": cached_games}}}
+                _db_stub.player_cache_collection.docs.append(original)
+                game = {"PLAYER_ID": 42, "TEAM_ID": 10, "GAME_ID": "first", "GAME_DATE": "2026-10-20", "PTS": 12}
+                games = [game] + ([{**game, **extra_game}] if extra_game else [])
+                with patch("nba.build_player_summary_from_data") as summary:
+                    result = reconciliation.refresh_current_season_from_bulk(games, "2026-27", {42: totals})
+                self.assertEqual(result["deferred"], 1)
+                self.assertEqual(result["updated"], 0)
+                self.assertEqual(_db_stub.player_cache_collection.docs, [original])
+                self.assertTrue(_db_stub.fetch_queue_collection.docs[0]["refresh_stats"])
+                summary.assert_not_called()
+
+    def test_reconciliation_finds_missing_game_even_with_newer_cached_game(self):
+        _db_stub.player_cache_collection.docs.append({
+            "player_id": 42, "data": {"season_game_logs": {
+                "2026-27": [{"Game_ID": "newer"}],
+            }},
+        })
+        result = reconciliation.reconcile_current_season_players(
+            [{"id": 42, "full_name": "Player"}],
+            games=[{"PLAYER_ID": 42, "GAME_ID": "older"},
+                   {"PLAYER_ID": 42, "GAME_ID": "newer"}], season="2026-27",
+        )
+        self.assertEqual(result["missing_games"], 1)
+        self.assertEqual(result["new_jobs"], 1)
+        self.assertTrue(_db_stub.fetch_queue_collection.docs[0]["refresh_stats"])
+
+    def test_reconciliation_discovers_rookie_from_games_and_uncached_roster_player(self):
+        result = reconciliation.reconcile_current_season_players(
+            [{"id": 42, "full_name": "Yet To Debut"}],
+            games=[{"PLAYER_ID": 43, "PLAYER_NAME": "New Rookie", "GAME_ID": "debut"}],
+            season="2026-27",
+        )
+        self.assertEqual(result["players_checked"], 2)
+        self.assertEqual(result["uncached_players"], 2)
+        self.assertEqual(result["new_jobs"], 2)
+        jobs = {job["player_id"]: job for job in _db_stub.fetch_queue_collection.docs}
+        self.assertEqual(jobs[43]["name"], "New Rookie")
+        self.assertTrue(all(job["refresh_stats"] for job in jobs.values()))
+
+    def test_reconciliation_promotes_repair_preserves_retry_and_is_idempotent(self):
+        _db_stub.player_cache_collection.docs.append({"player_id": 42, "data": {}})
+        _db_stub.fetch_queue_collection.docs.extend([
+            {"player_id": 42, "repair_missing_logs": True, "attempts": 3,
+             "next_attempt_at": "later", "locked_until": "locked", "claim_token": "owner"},
+            {"player_id": 42, "job_type": "player_info_refresh"},
+            {"player_id": 42, "job_type": "shot_chart_refresh"},
+        ])
+        for _ in range(2):
+            result = reconciliation.reconcile_current_season_players(
+                [{"id": 42, "full_name": "Player"}],
+                games=[{"PLAYER_ID": 42, "GAME_ID": "missing"}], season="2026-27",
+            )
+            self.assertEqual(result["new_jobs"], 0)
+            self.assertEqual(result["existing_jobs_ensured"], 1)
+        jobs = _db_stub.fetch_queue_collection.docs
+        self.assertEqual(len(jobs), 3)
+        self.assertTrue(jobs[0]["refresh_stats"])
+        self.assertNotIn("repair_missing_logs", jobs[0])
+        self.assertEqual(jobs[0]["attempts"], 3)
+        self.assertEqual(jobs[0]["next_attempt_at"], "later")
+        self.assertEqual(jobs[0]["locked_until"], "locked")
+        self.assertEqual(jobs[0]["claim_token"], "owner")
+        self.assertNotIn("refresh_stats", jobs[1])
+        self.assertNotIn("refresh_stats", jobs[2])
+
+    def test_reconciliation_leaves_complete_cache_and_idle_cached_player_alone(self):
+        _db_stub.player_cache_collection.docs.extend([
+            {"player_id": 42, "data": {"season_game_logs": {
+                "2026-27": [{"Game_ID": "regular"}],
+            }, "playin_game_log": [{"GAME_ID": "playin"}],
+                "playoff_season_game_logs": {"2026-27": [{"GAME_ID": "playoff"}]} }},
+            {"player_id": 43, "data": {}},
+        ])
+        result = reconciliation.reconcile_current_season_players(
+            [{"id": 42, "full_name": "Player"}, {"id": 43, "full_name": "Idle"}],
+            games=[{"PLAYER_ID": 42, "GAME_ID": game} for game in ("regular", "playin", "playoff")],
+            season="2026-27",
+        )
+        self.assertEqual(result["missing_games"], 0)
+        self.assertEqual(result["new_jobs"], 0)
+        self.assertEqual(_db_stub.fetch_queue_collection.docs, [])
+
+    def test_reconciliation_fetches_explicit_season_and_keeps_successful_sources(self):
+        import pandas as pd
+
+        response = types.SimpleNamespace(get_data_frames=lambda: [pd.DataFrame([
+            {"PLAYER_ID": 42, "GAME_ID": "regular"},
+        ])])
+        with patch.object(reconciliation.leaguegamelog, "LeagueGameLog", side_effect=[
+            response, ValueError("unavailable"), response,
+        ]) as endpoint, patch.object(reconciliation, "run_with_retries", side_effect=lambda fn: fn()):
+            games, failures = reconciliation.fetch_current_season_games("2026-27")
+        self.assertEqual(len(games), 2)
+        self.assertEqual(failures, ["PlayIn"])
+        self.assertEqual([call.kwargs["season"] for call in endpoint.call_args_list], ["2026-27"] * 3)
+        self.assertEqual([call.kwargs["season_type_all_star"] for call in endpoint.call_args_list],
+                         ["Regular Season", "PlayIn", "Playoffs"])
 
     def test_live_team_is_normalized_and_free_agent_team_zero_is_preserved(self):
         info = player_info.normalize_player_info({

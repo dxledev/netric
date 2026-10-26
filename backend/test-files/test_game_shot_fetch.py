@@ -100,6 +100,44 @@ class GameShotFetchTests(unittest.TestCase):
             "data": {"season_game_logs": {"2025-26": self.games}},
         }
 
+    def test_nightly_queues_every_scope_and_player_without_resetting_retries(self):
+        _db_stub.player_cache_collection.documents["player-8"] = {
+            "player_id": 8,
+            "data": {
+                "playoff_season_game_logs": {"2025-26": [{"GAME_ID": "0042500101", "FGA": 0, "FGM": 0}]},
+                "playin_season_game_logs": {"2025-26": [{"GAME_ID": "0052500101", "FGA": 3, "FGM": 1}]},
+                "season_game_logs": {"2024-25": [{"GAME_ID": "0022400101", "FGA": 1, "FGM": 1}]},
+            },
+        }
+        first = shot_service.queue_current_season_shots("2025-26")
+        self.assertEqual(first["games_checked"], 4)
+        self.assertEqual(first["queued"], 4)
+        queue_key = shot_service.game_queue_id("2025-26", "Regular Season", 7, self.game_id)
+        job = _db_stub.fetch_queue_collection.documents[queue_key]
+        job.update({"attempts": 3, "next_attempt_at": "later", "claim_token": "owner", "priority": 100})
+        second = shot_service.queue_current_season_shots("2025-26")
+        self.assertEqual(second["queued"], 0)
+        self.assertEqual(second["already_queued"], 4)
+        self.assertEqual(len(_db_stub.fetch_queue_collection.documents), 4)
+        self.assertEqual(job["attempts"], 3)
+        self.assertEqual(job["next_attempt_at"], "later")
+        self.assertEqual(job["claim_token"], "owner")
+        self.assertEqual(job["priority"], 100)
+
+    def test_nightly_reports_verified_cached_shots_separately(self):
+        _db_stub.shot_chart_cache_collection.documents[self.cache_key] = {
+            "_id": self.cache_key,
+            "source": shot_service.SOURCE,
+            "cache_version": shot_service.CACHE_VERSION,
+            "game_expectations": {self.game_id: {"fga": 2, "fgm": 1}},
+            "shots_by_game": {self.game_id: [shot_row(7, self.game_id, 1, 1), shot_row(7, self.game_id, 2, 0)]},
+        }
+        result = shot_service.queue_current_season_shots("2025-26")
+        self.assertEqual(result["games_checked"], 2)
+        self.assertEqual(result["already_cached"], 1)
+        self.assertEqual(result["queued"], 1)
+        self.assertEqual(result["failed"], 0)
+
     def test_endpoint_includes_optional_game_filter(self):
         headers = list(shot_row(7, self.game_id, 1).keys())
         response = types.SimpleNamespace(

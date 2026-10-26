@@ -87,3 +87,9 @@ systemctl status netric-healthcheck.timer
 curl -I http://127.0.0.1/
 curl -I http://127.0.0.1/api/openapi.json
 ```
+
+The NBA refresh runs at 08:00 local time and 30 minutes after each completed run.
+It updates current-season player games and totals in bulk, then processes queued
+work for up to 20 minutes. Failed jobs wait for a subsequent run. A 45-minute
+service timeout recovers a stalled refresh; failures restart after five minutes.
+Inspect results with `journalctl -u netric-nightly-refresh.service --since yesterday`.

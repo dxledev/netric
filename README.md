@@ -157,6 +157,31 @@ takes precedence over historical season teams and static trade overrides. New
 season stats become the default after games are recorded, while cached prior
 seasons remain available.
 
+Nightly refreshes also compare live, league-wide player game IDs with cached
+logs. Missing appearances queue a full stats refresh even if the latest game
+date or season totals already match. Uncached roster players, including rookies,
+are queued, and live game logs discover players missing from the player lists.
+Existing jobs are reused without resetting retry schedules or worker locks.
+Complete regular-season game logs and matching official league totals update
+all players in bulk; incomplete or inconsistent snapshots use individual jobs.
+Each queue pass attempts failed jobs only once and spends up to 20 minutes
+processing work, leaving remaining jobs for the next refresh. The timer runs
+each morning at 08:00 local time and 30 minutes after the previous run finishes.
+Every recorded current-season game also schedules missing shot-chart coverage
+automatically, including games added by individual refresh jobs. Existing jobs
+keep their retries and worker locks. The nightly JSON result includes player
+reconciliation and shot-chart counts before and after queue processing.
+
+To install the recurring-refresh fix and restart a stuck refresh, run:
+
+```bash
+./scripts/repair-nightly-refresh
+```
+
+The script requests sudo locally, preserves the previous service units, and
+starts a full refresh. Follow its results with
+`journalctl -fu netric-nightly-refresh.service`.
+
 To backfill shot locations into the local stats database using the fetch worker:
 
 ```bash

@@ -146,6 +146,7 @@ _player_info.normalize_player_info = _normalize_info
 
 _shot_service = types.ModuleType("services.shot_service")
 _shot_service.process_shot_chart_job = lambda job: 0
+_shot_service.queue_player_game_shots = lambda *args: {"queued": 0}
 
 _team_service = types.ModuleType("services.team_service")
 _team_service.BBR_REQUEST_DELAY_SECONDS = 0
@@ -305,6 +306,25 @@ class PlayerJobTests(unittest.TestCase):
 
 
 class QueueClaimTests(unittest.TestCase):
+    def test_current_stats_precede_other_jobs_and_retries_wait_for_next_pass(self):
+        from datetime import UTC, datetime
+
+        cutoff = datetime(2026, 10, 26, tzinfo=UTC)
+        queue = _database.fetch_queue_collection
+        with patch.object(queue, "find_one_and_update", return_value={"player_id": 42}) as claim:
+            job = fetch_worker.find_next_job(attempted_before=cutoff)
+        self.assertEqual(job["player_id"], 42)
+        claim.assert_called_once()
+        query = claim.call_args.args[0]
+        self.assertTrue(query["refresh_stats"])
+        self.assertIn({"last_attempted_at": {"$lt": cutoff}}, query["$and"][-1]["$or"])
+
+    def test_queue_stops_at_deadline_without_claiming_more_work(self):
+        with patch.object(fetch_worker.time, "monotonic", return_value=21), \
+             patch.object(fetch_worker, "find_next_job") as claim:
+            self.assertEqual(fetch_worker.run_queue(deadline=20), 0)
+        claim.assert_not_called()
+
     def test_shot_failures_back_off_with_cap_and_preserve_other_jobs(self):
         queue = _database.fetch_queue_collection
         for job_type, attempts, expected in (
